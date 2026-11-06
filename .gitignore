@@ -1,0 +1,8 @@
+# Poza git (../Dokumentacja/AGENTS.md §4): sekrety i dane lokalne
+.env
+.env.*
+!.env.example
+dane/
+node_modules/
+dist/
+.claude/worktrees/
