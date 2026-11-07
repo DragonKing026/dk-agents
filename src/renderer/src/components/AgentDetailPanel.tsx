@@ -15,6 +15,7 @@ import { ToolWaterfall } from './ToolWaterfall';
 import { AgentControlStrip } from './AgentControlStrip';
 import { EditAgentModal } from './EditAgentModal';
 import { GitTab } from './GitTab';
+import { ChatPanel } from './chat/ChatPanel';
 import { Icon } from './Icon';
 import { AgentNameEditor } from './AgentNameEditor';
 import { useStore, type Agent } from '@/store/store';
@@ -238,6 +239,10 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
       {/* Active tab body — fills remaining space */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {sidebarTab === 'chat' && (
+          <ChatPanel agent={agent} />
+        )}
+
         {sidebarTab === 'terminal' && (
           isReal && agent.ptyId ? (
             isFullscreenedHere ? (

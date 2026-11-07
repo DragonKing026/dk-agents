@@ -174,3 +174,27 @@ test('permission_cancelled for an unknown id leaves the transcript unchanged', (
   const t = run([{ kind: 'permission_request', requestId: 'r1', toolName: 'Write', input: {} }]);
   assert.deepStrictEqual(ct.applyChatEvent(t, { kind: 'permission_cancelled', requestId: 'zz' }), t);
 });
+
+const toolStatuses = (t) => t.items.filter((i) => i.type === 'tool').map((i) => i.status);
+
+test('exit turns tool cards still running into errors (no endless spinner)', () => {
+  const t = run([
+    { kind: 'tool_use', id: 't1', name: 'Bash', input: {} },
+    { kind: 'tool_use', id: 't2', name: 'Read', input: {} },
+    { kind: 'tool_result', toolUseId: 't2', content: 'ok', isError: false },
+    { kind: 'exit', code: null, signal: 'SIGTERM' }
+  ]);
+  assert.deepStrictEqual(toolStatuses(t), ['error', 'done']);
+  const interrupted = t.items.find((i) => i.type === 'tool' && i.toolUseId === 't1');
+  assert.strictEqual(interrupted.isError, true);
+  assert.strictEqual(interrupted.result, undefined, 'no invented result text');
+});
+
+test('result closes tool cards that never got a result as done', () => {
+  const t = run([
+    { kind: 'tool_use', id: 't1', name: 'Bash', input: {} },
+    { kind: 'result', isError: false }
+  ]);
+  assert.deepStrictEqual(toolStatuses(t), ['done']);
+  assert.strictEqual(t.status, 'idle');
+});

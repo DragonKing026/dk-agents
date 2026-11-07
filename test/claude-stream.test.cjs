@@ -182,3 +182,25 @@ test('CLAUDE_STREAM_ARGS has the recorded flag set', () => {
     '--permission-prompt-tool', 'stdio'
   ]);
 });
+
+test('lines carrying a parent_tool_use_id (subagent messages) yield no events', () => {
+  const sub = JSON.stringify({
+    type: 'assistant',
+    parent_tool_use_id: 'toolu_parent',
+    message: { id: 'msg_s', content: [{ type: 'text', text: 'subagent chatter' }, { type: 'tool_use', id: 'toolu_s', name: 'Read', input: {} }] }
+  });
+  assert.deepStrictEqual(cs.parseClaudeLine(sub), []);
+  const subResult = JSON.stringify({
+    type: 'user',
+    parent_tool_use_id: 'toolu_parent',
+    message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_s', content: 'x' }] }
+  });
+  assert.deepStrictEqual(cs.parseClaudeLine(subResult), []);
+});
+
+test('a null or empty parent_tool_use_id is a main-conversation line', () => {
+  for (const parent of [null, '']) {
+    const line = JSON.stringify({ type: 'assistant', parent_tool_use_id: parent, message: { id: 'm', content: [{ type: 'text', text: 'hi' }] } });
+    assert.deepStrictEqual(cs.parseClaudeLine(line), [{ kind: 'text', messageId: 'm', text: 'hi' }]);
+  }
+});
