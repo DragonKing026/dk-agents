@@ -69,6 +69,8 @@ import { resolveGodName } from '../shared/godIdentity';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
+import { ClaudeChatSession } from './chatSession';
+import type { ChatEvent } from '../shared/chatEvents';
 import {
   argsWithAutoModeFlag,
   inferAgentProvider,
@@ -3034,6 +3036,70 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
 
+// ─── IPC: chat sessions (`claude -p` stream-json, one per Claude Code agent) ──
+// The renderer drives them with chat:start / chat:send / chat:permission / chat:stop and receives
+// every ChatEvent on 'chat:event' (agentId, event). The session itself never throws on process
+// problems; they arrive as `error` / `exit` events.
+const chatSessions = new Map<string, { session: ClaudeChatSession; sender: Electron.WebContents }>();
+
+function stopAllChatSessions(): void {
+  for (const { session } of [...chatSessions.values()]) {
+    try { session.stop(); } catch (e) { console.error('[quit] chat session stop:', e); }
+  }
+}
+
+ipcMain.handle('chat:start', (evt, agentId: unknown, opts: unknown): { ok: boolean; error?: string; existing?: boolean } => {
+  if (typeof agentId !== 'string' || !agentId) return { ok: false, error: 'invalid agent id' };
+  const live = chatSessions.get(agentId);
+  if (live) {
+    live.sender = evt.sender; // the latest caller receives the events
+    return { ok: true, existing: true };
+  }
+  const agent = hive.registry().agents[agentId];
+  if (!agent) return { ok: false, error: `Unknown agent: ${agentId}` };
+  if (!isClaudeProvider(agent.provider ?? 'claude')) {
+    return { ok: false, error: `Chat is available only for Claude Code agents (this agent runs ${agent.provider}).` };
+  }
+  if (!agent.cwd) return { ok: false, error: 'This agent has no working directory (cwd).' };
+  const model = typeof (opts as { model?: unknown } | null | undefined)?.model === 'string'
+    ? ((opts as { model: string }).model.trim() || undefined)
+    : undefined;
+  const session = new ClaudeChatSession({ agentId, cwd: agent.cwd, ...(model ? { model } : {}) });
+  const entry = { session, sender: evt.sender };
+  chatSessions.set(agentId, entry);
+  session.on('event', (ev: ChatEvent) => {
+    if (!entry.sender.isDestroyed()) entry.sender.send('chat:event', agentId, ev);
+    if (ev.kind === 'exit' && chatSessions.get(agentId)?.session === session) chatSessions.delete(agentId);
+  });
+  evt.sender.once('destroyed', () => {
+    if (chatSessions.get(agentId)?.sender === evt.sender) session.stop();
+  });
+  session.start();
+  return { ok: true };
+});
+ipcMain.handle('chat:send', (_evt, agentId: unknown, text: unknown): { ok: boolean; error?: string } => {
+  if (typeof agentId !== 'string' || typeof text !== 'string') return { ok: false, error: 'invalid args' };
+  const live = chatSessions.get(agentId);
+  if (!live) return { ok: false, error: 'No chat session for this agent.' };
+  live.session.send(text);
+  return { ok: true };
+});
+ipcMain.handle('chat:permission', (_evt, agentId: unknown, requestId: unknown, allow: unknown): { ok: boolean; error?: string } => {
+  if (typeof agentId !== 'string' || typeof requestId !== 'string' || typeof allow !== 'boolean') return { ok: false, error: 'invalid args' };
+  const live = chatSessions.get(agentId);
+  if (!live) return { ok: false, error: 'No chat session for this agent.' };
+  live.session.respondPermission(
+    requestId,
+    allow ? { allow: true, input: undefined } : { allow: false, message: 'Denied by the user.' }
+  );
+  return { ok: true };
+});
+ipcMain.handle('chat:stop', (_evt, agentId: unknown): { ok: boolean; error?: string } => {
+  if (typeof agentId !== 'string') return { ok: false, error: 'invalid args' };
+  chatSessions.get(agentId)?.session.stop();
+  return { ok: true };
+});
+
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
 // the cwd from a transcript record; null when the id is invalid/unknown.
@@ -3741,6 +3807,7 @@ function teardownAndQuit(): void {
   try { reflector.stop(); } catch (e) { console.error('[quit] reflector.stop:', e); }
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
   try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
+  try { stopAllChatSessions(); } catch (e) { console.error('[quit] chat sessions:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   app.quit();
 }
@@ -5417,6 +5484,10 @@ onConfigWritten((config) => {
     if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
     w.webContents.send('config:changed', config);
   }
+});
+
+app.on('will-quit', () => {
+  stopAllChatSessions();
 });
 
 app.on('window-all-closed', () => {
