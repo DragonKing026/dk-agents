@@ -879,13 +879,23 @@ function ensureClaudeProjectTrust(home: string, cwd: string): void {
  *
  *  Each file is an independent best-effort boundary: unsafe existing contents
  *  are preserved without preventing the other file from being handled safely. */
-export function ensureClaudePermissionsAccepted(cwd?: string): void {
+export function ensureClaudePermissionsAccepted(cwd?: string, autoMode = false): void {
   let home: string;
   try { home = homedir(); } catch { return; }
   if (!home) return;
 
-  ensureClaudeGlobalPermissions(home);
-  if (cwd) {
+  const writes = claudeSetupWrites({ autoMode });
+  if (writes.globalSkipPrompts) ensureClaudeGlobalPermissions(home);
+  if (cwd && writes.trustProject) {
     ensureClaudeProjectTrust(home, cwd);
   }
+}
+
+/** Which Claude Code files a spawn may touch. The GLOBAL `~/.claude/settings.json`
+ *  skip-prompt flags (they silence the bypass-mode warnings for every Claude
+ *  session of the user) are written only when the user deliberately turned
+ *  autoMode on. The per-folder trust entry in `~/.claude.json` is written for
+ *  every Claude agent spawn, because the PTY cannot answer the trust dialog. */
+export function claudeSetupWrites(cfg: { autoMode?: boolean }): { globalSkipPrompts: boolean; trustProject: boolean } {
+  return { globalSkipPrompts: cfg.autoMode === true, trustProject: true };
 }
