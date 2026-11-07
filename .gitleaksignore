@@ -1,0 +1,10 @@
+# Atrapy sekretów w testach redakcji z MD (test/…, test/repro/…) — nie są prawdziwymi kluczami
+test/repro/bug-12.repro.cjs:generic-api-key:420
+test/repro/bug-12.repro.cjs:private-key:98
+test/repro/bug-17.repro.cjs:generic-api-key:92
+test/slack-timeout.test.cjs:private-key:52
+test/voice-messages.test.cjs:generic-api-key:189
+test/voice-messages.test.cjs:generic-api-key:193
+test/voice-messages.test.cjs:generic-api-key:199
+test/voice-messages.test.cjs:slack-app-token:185
+test/voice-messages.test.cjs:stripe-access-token:191
