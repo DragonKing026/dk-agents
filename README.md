@@ -1,9 +1,10 @@
 # DK-Agents
 
-This is a custom fork of [Munder Difflin](https://github.com/HarnessMD/munder-difflin), made for the author's own
-needs. It is built mostly with AI (Claude) and edited only by the author. The repository is public, and requests
-for improvements are welcome as issues. If you want an app maintained by a larger team, use the original project:
-<https://github.com/HarnessMD/munder-difflin>.
+> [!IMPORTANT]
+> This is a custom fork of [Munder Difflin](https://github.com/HarnessMD/munder-difflin), made for the author's own
+> needs. It is built mostly with AI (Claude) and edited only by the author. The repository is public, and requests
+> for improvements are welcome as issues. If you want an app maintained by a larger team, use the original project:
+> <https://github.com/HarnessMD/munder-difflin>.
 
 ## Status
 
