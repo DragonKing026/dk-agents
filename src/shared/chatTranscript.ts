@@ -53,6 +53,15 @@ function cancelPending(items: ChatItem[]): ChatItem[] {
   return items.map((i) => (i.type === 'permission' && i.state === 'pending' ? { ...i, state: 'cancelled' } : i));
 }
 
+/** Tool cards that never got a result: `done` when the turn ended normally, `error` (interrupted) when the process died. */
+function settleTools(items: ChatItem[], status: 'done' | 'error'): ChatItem[] {
+  return items.map((i) =>
+    i.type === 'tool' && i.status === 'running'
+      ? { ...i, status, ...(status === 'error' ? { isError: true } : {}) }
+      : i
+  );
+}
+
 /** Appends the user's message and marks the session as running (also restarts an ended one). */
 export function addUserMessage(t: ChatTranscript, text: string): ChatTranscript {
   return { ...append(t, (id) => ({ id, type: 'user', text })), status: 'running' };
@@ -129,7 +138,7 @@ export function applyChatEvent(t: ChatTranscript, ev: ChatEvent): ChatTranscript
     }
 
     case 'result': {
-      const base: ChatTranscript = { ...t, items: cancelPending(t.items), status: 'idle' };
+      const base: ChatTranscript = { ...t, items: settleTools(cancelPending(t.items), 'done'), status: 'idle' };
       return ev.isError
         ? append(base, (id) => ({ id, type: 'notice', level: 'error', text: ev.text ?? 'The agent finished with an error.' }))
         : base;
@@ -139,7 +148,7 @@ export function applyChatEvent(t: ChatTranscript, ev: ChatEvent): ChatTranscript
       return append(t, (id) => ({ id, type: 'notice', level: 'error', text: ev.message }));
 
     case 'exit': {
-      const base: ChatTranscript = { ...t, items: cancelPending(t.items), status: 'ended' };
+      const base: ChatTranscript = { ...t, items: settleTools(cancelPending(t.items), 'error'), status: 'ended' };
       if (ev.code === 0 || (ev.code === null && ev.signal === null)) return base;
       const how = ev.signal !== null ? `signal ${ev.signal}` : `code ${ev.code}`;
       return append(base, (id) => ({ id, type: 'notice', level: 'error', text: `The agent process exited (${how}).` }));

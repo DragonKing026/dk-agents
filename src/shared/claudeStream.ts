@@ -67,6 +67,11 @@ export function parseClaudeLine(line: string): ChatEvent[] {
     return [{ kind: 'error', message: `Unparseable line from claude: ${(err as Error).message}` }];
   }
   if (!isObj(raw)) return [];
+  // Messages of Claude subagents (Task tool) carry the parent's tool_use_id; they are not part of the
+  // main conversation and are dropped here (the parent's own Task card still shows the outcome).
+  if ((raw.type === 'assistant' || raw.type === 'user') && typeof raw.parent_tool_use_id === 'string' && raw.parent_tool_use_id.length > 0) {
+    return [];
+  }
 
   switch (raw.type) {
     case 'system':
