@@ -69,7 +69,8 @@ import { resolveGodName } from '../shared/godIdentity';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
-import { ClaudeChatSession } from './chatSession';
+import { ClaudeChatSession, validateChatModel } from './chatSession';
+import { ChatSessionMap } from './chatSessionMap';
 import type { ChatEvent } from '../shared/chatEvents';
 import {
   argsWithAutoModeFlag,
@@ -3040,40 +3041,42 @@ ipcMain.handle('pty:list', () => ptyManager.list());
 // The renderer drives them with chat:start / chat:send / chat:permission / chat:stop and receives
 // every ChatEvent on 'chat:event' (agentId, event). The session itself never throws on process
 // problems; they arrive as `error` / `exit` events.
-const chatSessions = new Map<string, { session: ClaudeChatSession; sender: Electron.WebContents }>();
+const chatSessions = new ChatSessionMap<ClaudeChatSession, Electron.WebContents>();
+/** WebContents that already have a 'destroyed' hook, so listeners do not pile up per session. */
+const chatSenders = new WeakSet<Electron.WebContents>();
 
+/** Application quit: no timers — SIGTERM and SIGKILL are sent synchronously. */
 function stopAllChatSessions(): void {
-  for (const { session } of [...chatSessions.values()]) {
-    try { session.stop(); } catch (e) { console.error('[quit] chat session stop:', e); }
-  }
+  chatSessions.stopAll({ immediate: true });
 }
 
 ipcMain.handle('chat:start', (evt, agentId: unknown, opts: unknown): { ok: boolean; error?: string; existing?: boolean } => {
   if (typeof agentId !== 'string' || !agentId) return { ok: false, error: 'invalid agent id' };
-  const live = chatSessions.get(agentId);
+  const live = chatSessions.get(agentId); // a session that is shutting down does not count
   if (live) {
     live.sender = evt.sender; // the latest caller receives the events
     return { ok: true, existing: true };
   }
-  const agent = hive.registry().agents[agentId];
+  const agents = hive.registry().agents;
+  const agent = Object.hasOwn(agents, agentId) ? agents[agentId] : undefined;
   if (!agent) return { ok: false, error: `Unknown agent: ${agentId}` };
   if (!isClaudeProvider(agent.provider ?? 'claude')) {
     return { ok: false, error: `Chat is available only for Claude Code agents (this agent runs ${agent.provider}).` };
   }
   if (!agent.cwd) return { ok: false, error: 'This agent has no working directory (cwd).' };
-  const model = typeof (opts as { model?: unknown } | null | undefined)?.model === 'string'
-    ? ((opts as { model: string }).model.trim() || undefined)
-    : undefined;
-  const session = new ClaudeChatSession({ agentId, cwd: agent.cwd, ...(model ? { model } : {}) });
-  const entry = { session, sender: evt.sender };
-  chatSessions.set(agentId, entry);
+  const modelCheck = validateChatModel((opts as { model?: unknown } | null | undefined)?.model);
+  if (!modelCheck.ok) return { ok: false, error: modelCheck.error };
+  const session = new ClaudeChatSession({ agentId, cwd: agent.cwd, ...(modelCheck.model ? { model: modelCheck.model } : {}) });
+  const entry = chatSessions.set(agentId, session, evt.sender);
   session.on('event', (ev: ChatEvent) => {
     if (!entry.sender.isDestroyed()) entry.sender.send('chat:event', agentId, ev);
-    if (ev.kind === 'exit' && chatSessions.get(agentId)?.session === session) chatSessions.delete(agentId);
+    if (ev.kind === 'exit') chatSessions.removeIfCurrent(agentId, session);
   });
-  evt.sender.once('destroyed', () => {
-    if (chatSessions.get(agentId)?.sender === evt.sender) session.stop();
-  });
+  if (!chatSenders.has(evt.sender)) {
+    chatSenders.add(evt.sender);
+    const wc = evt.sender;
+    wc.once('destroyed', () => chatSessions.stopForSender(wc));
+  }
   session.start();
   return { ok: true };
 });

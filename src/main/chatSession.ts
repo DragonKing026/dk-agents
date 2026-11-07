@@ -28,6 +28,16 @@ export interface ChatSessionOptions {
 
 const STDERR_TAIL_BYTES = 2000;
 const TERM_DELAY_MS = 200;
+/** Longest user message `send()` accepts. */
+export const MAX_CHAT_MESSAGE_CHARS = 100_000;
+const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,99}$/;
+
+/** Validates the optional model name coming from the renderer (it becomes the `--model` argument). */
+export function validateChatModel(value: unknown): { ok: true; model?: string } | { ok: false; error: string } {
+  if (value === undefined || value === null || value === '') return { ok: true };
+  if (typeof value !== 'string' || !MODEL_RE.test(value)) return { ok: false, error: 'Invalid model name.' };
+  return { ok: true, model: value };
+}
 
 /**
  * One long-lived `claude -p` stream-json session (a plain child process, no PTY). Emits `'event'`
@@ -37,7 +47,7 @@ export class ClaudeChatSession extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null;
   private started = false;
   private exited = false;
-  private stopping = false;
+  private stopping_ = false;
   private killTimer: NodeJS.Timeout | null = null;
   private stderrTail = '';
   private readonly lines = new LineBuffer();
@@ -50,6 +60,14 @@ export class ClaudeChatSession extends EventEmitter {
 
   get agentId(): string {
     return this.opts.agentId;
+  }
+
+  get stopping(): boolean {
+    return this.stopping_;
+  }
+
+  get pid(): number | undefined {
+    return this.child?.pid;
   }
 
   /** True between `start()` and `exit`. */
@@ -67,6 +85,12 @@ export class ClaudeChatSession extends EventEmitter {
   start(): void {
     if (this.started) return;
     this.started = true;
+    if (this.stopping_) {
+      // stop() ran before start(): never spawn.
+      this.emitEvent({ kind: 'error', message: 'Cannot start: the chat session was stopped.' });
+      this.finish(null, null);
+      return;
+    }
     const command = this.opts.command ?? resolveCommand('claude');
     let child: ChildProcessWithoutNullStreams;
     try {
@@ -101,7 +125,7 @@ export class ClaudeChatSession extends EventEmitter {
       this.stderrTail = (this.stderrTail + chunk).slice(-STDERR_TAIL_BYTES);
     });
     child.on('close', (code, signal) => {
-      if (code !== 0 && !this.stopping && this.stderrTail.trim().length > 0) {
+      if (code !== 0 && !this.stopping_ && this.stderrTail.trim().length > 0) {
         this.emitEvent({ kind: 'error', message: `claude exited with an error: ${this.stderrTail.trim()}` });
       }
       this.finish(code, signal);
@@ -109,8 +133,12 @@ export class ClaudeChatSession extends EventEmitter {
   }
 
   send(text: string): void {
-    if (!this.alive || !this.child || this.stopping) {
+    if (!this.alive || !this.child || this.stopping_) {
       this.emitEvent({ kind: 'error', message: 'Cannot send: the chat session is not running.' });
+      return;
+    }
+    if (text.length > MAX_CHAT_MESSAGE_CHARS) {
+      this.emitEvent({ kind: 'error', message: `Message too long (limit ${MAX_CHAT_MESSAGE_CHARS} characters).` });
       return;
     }
     this.write(encodeUserMessage(text));
@@ -131,20 +159,40 @@ export class ClaudeChatSession extends EventEmitter {
     this.write(encodePermissionResponse(requestId, decision));
   }
 
-  /** Denies pending permissions, closes stdin, SIGTERM (after a short delay), then SIGKILL after the grace period. Idempotent. */
-  stop(): void {
-    if (this.exited || this.stopping) return;
-    this.stopping = true;
+  /**
+   * Denies pending permissions, closes stdin, SIGTERM (after a short delay), then SIGKILL after the grace
+   * period. `immediate` (application quit): SIGTERM right away and a synchronous SIGKILL, no timers.
+   * Idempotent; a second call with `immediate` still escalates a session that is already stopping.
+   */
+  stop(opts?: { immediate?: boolean }): void {
+    if (this.exited) return;
+    const immediate = opts?.immediate === true;
+    if (this.stopping_ && !immediate) return;
+    const first = !this.stopping_;
+    this.stopping_ = true;
     const child = this.child;
     if (!child) return; // never started (or failed to spawn): nothing to stop
-    for (const id of [...this.pending.keys()]) {
-      this.pending.delete(id);
-      this.write(encodePermissionResponse(id, { allow: false, message: 'Session stopped.' }));
+    if (first) {
+      for (const id of [...this.pending.keys()]) {
+        this.pending.delete(id);
+        this.write(encodePermissionResponse(id, { allow: false, message: 'Session stopped.' }));
+      }
+      try {
+        child.stdin.end();
+      } catch {
+        /* already closed */
+      }
     }
-    try {
-      child.stdin.end();
-    } catch {
-      /* already closed */
+    if (this.killTimer) clearTimeout(this.killTimer);
+    if (immediate) {
+      for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
+        try {
+          child.kill(sig);
+        } catch {
+          /* already gone */
+        }
+      }
+      return;
     }
     // Give the CLI a moment to read the denials and exit on stdin EOF before the signals start.
     this.killTimer = setTimeout(() => {
