@@ -1,14 +1,15 @@
 /**
  * Fetch + cache the REMOTE model catalog.
  *
- * Same shape as the hero payload and the skills catalog: served from cache when
- * fresh, refetched otherwise, and NEVER fatal. A failed fetch falls back to the
+ * Network-silent by default: nothing is fetched unless the caller asks (`force`,
+ * the Settings "Refresh catalog" button) or the user turned automatic updates
+ * on (`modelCatalogAutoUpdate`, default off). Never fatal. A failed fetch falls back to the
  * cached copy, and a missing cache falls back to null — which the renderer reads
  * as "keep the catalog compiled into this build".
  *
  * The point of this file: shipping a model was a build. Now it is an edit to
- * docs/model-catalog.json on main, which every installed copy picks up within
- * the TTL. The baked catalog stays the floor, so the pickers are never empty and
+ * catalog/model-catalog.json on main, which every installed copy picks up within
+ * the TTL once enabled. The baked catalog stays the floor, so the pickers are never empty and
  * never wait on the network.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -17,11 +18,10 @@ import { getText } from './fetchText';
 import { parseModelCatalog, type ModelCatalog } from '../shared/modelCatalogPayload';
 
 const CATALOG_URL =
-  'https://raw.githubusercontent.com/chaitanyagiri/munder-difflin/main/docs/model-catalog.json';
+  'https://raw.githubusercontent.com/DragonKing026/dk-agents/main/catalog/model-catalog.json';
 
 /** Models ship on a human timescale, and a stale list costs the user nothing —
- *  every command field in the app stays editable. Six hours matches the hero
- *  payload; a launch after that refreshes in the background. */
+ *  every command field in the app stays editable. Six hours a launch after that refreshes in the background. */
 const TTL_MS = 6 * 60 * 60 * 1000;
 
 export interface RemoteCatalogResult {
@@ -35,7 +35,7 @@ export interface RemoteCatalogResult {
 
 export async function loadModelCatalog(
   cachePath: string,
-  opts: { force?: boolean } = {}
+  opts: { force?: boolean; offline?: boolean } = {}
 ): Promise<RemoteCatalogResult> {
   let cached: { catalog: ModelCatalog; fetchedAt: number } | null = null;
   try {
@@ -50,6 +50,14 @@ export async function loadModelCatalog(
       }
     }
   } catch { cached = null; }
+
+  // Offline: serve whatever an earlier user-requested refresh left on disk, or
+  // nothing (the renderer keeps the baked catalog). No network, ever.
+  if (opts.offline && !opts.force) {
+    return cached
+      ? { catalog: cached.catalog, fetchedAt: cached.fetchedAt, stale: true }
+      : { catalog: null, fetchedAt: 0, stale: true };
+  }
 
   if (cached && !opts.force && Date.now() - cached.fetchedAt < TTL_MS) {
     return { catalog: cached.catalog, fetchedAt: cached.fetchedAt, stale: false };

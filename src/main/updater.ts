@@ -44,7 +44,7 @@ import { reduceStatus, clampPercent, isNewer, installerUrl, shouldShowReleaseDro
  *      downgrade is per-check, not a permanent latch.
  */
 
-const REPO = 'chaitanyagiri/munder-difflin';
+const REPO = 'DragonKing026/dk-agents';
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 const FALLBACK_CACHE_MS = 60 * 60 * 1000;     // 1h between releases/latest polls
 
@@ -124,9 +124,9 @@ function emit(status: UpdateStatus): void {
 
 function autoUpdateEnabled(): boolean {
   try {
-    return readConfig().autoUpdate !== false; // default ON
+    return readConfig().autoUpdate === true; // default OFF (opt-in)
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -477,7 +477,7 @@ export function initAutoUpdater(getWebContents: () => WebContents | null): void 
       // stamp cannot be written, `previous` stays null on every future launch,
       // so firing here would reopen the drop on every single boot forever.
       // Showing it zero times on an unwritable userData is the lesser failure.
-      if (stamped && shouldShowReleaseDrop(previous, current)) {
+      if (stamped && autoUpdateEnabled() && shouldShowReleaseDrop(previous, current)) {
         logLine(`first run of ${current} (previous ${previous ?? 'none'}); fetching its release page`);
         fetchReleaseBody(current, (notes) => {
           emit({ state: 'just-updated', version: current, notes });
@@ -546,10 +546,11 @@ export function initAutoUpdater(getWebContents: () => WebContents | null): void 
       emit({ state: 'error', message });
     }
 
+    // No check at startup: the periodic check runs only when the user opted in
+    // (`autoUpdate: true`, default off). Otherwise checks happen on demand
+    // (`update:checkNow`, Settings → Updates).
     const tick = (): void => { if (autoUpdateEnabled()) void runCheck(); };
-    // First check shortly after boot (don't compete with spawn/startup I/O),
-    // then every CHECK_INTERVAL_MS.
-    setTimeout(tick, 30_000);
+    if (autoUpdateEnabled()) setTimeout(tick, 30_000);
     setInterval(tick, CHECK_INTERVAL_MS);
   })();
 }

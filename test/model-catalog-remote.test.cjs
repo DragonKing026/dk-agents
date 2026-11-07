@@ -4,7 +4,7 @@
  * The REMOTE model catalog: the parser that guards the network payload, and the
  * overlay that merges it onto the list compiled into the build.
  *
- * The failure this file exists to prevent: a bad edit to docs/model-catalog.json
+ * The failure this file exists to prevent: a bad edit to catalog/model-catalog.json
  * on main reaching every installed copy of the app and emptying a picker — or
  * worse, putting an attacker-shaped string on an agent's spawn command line. The
  * parser is total by contract, so every case below asserts the FALLBACK, not an
@@ -44,12 +44,12 @@ test('a well-formed catalog parses to exactly what it says', () => {
 });
 
 test('the shipped remote file is itself a valid catalog', () => {
-  // docs/model-catalog.json is what actually goes over the wire. If it does not
+  // catalog/model-catalog.json is what actually goes over the wire. If it does not
   // survive its own parser, every app in the field silently keeps the baked list
   // and nobody finds out until a model is missing.
-  const remote = require('../docs/model-catalog.json');
+  const remote = require('../catalog/model-catalog.json');
   const parsed = parseModelCatalog(remote);
-  assert.ok(parsed, 'docs/model-catalog.json must parse');
+  assert.ok(parsed, 'catalog/model-catalog.json must parse');
   assert.deepEqual(
     Object.keys(parsed.providers).sort(),
     Object.keys(baked.providers).sort(),
@@ -61,7 +61,7 @@ test('the remote file and the baked file agree on every model', () => {
   // They are seeded from each other. Drift here means a fresh install shows one
   // list for a few hours and a different one after the first refresh, which
   // reads as a bug in the picker rather than as two files out of sync.
-  const remote = require('../docs/model-catalog.json');
+  const remote = require('../catalog/model-catalog.json');
   assert.deepEqual(remote.providers, baked.providers);
 });
 

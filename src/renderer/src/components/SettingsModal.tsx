@@ -1,6 +1,6 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { agentModels, type HarnessConfig } from '@/store/config';
+import { agentModels, refreshModelCatalog, type HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
 import {
   CLONE_NODE_BLURB,
@@ -478,8 +478,8 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
     setAutoCompactPending(next);
   };
 
-  // ─── Auto-update (default ON; gates main's updater checks entirely) ────────
-  const [autoUpdateOn, setAutoUpdateOn] = useState<boolean>(config.autoUpdate !== false);
+  // ─── Auto-update (default OFF; opt-in periodic check — manual check is in Updates) ──
+  const [autoUpdateOn, setAutoUpdateOn] = useState<boolean>(config.autoUpdate === true);
   const toggleAutoUpdate = async () => {
     const next = !autoUpdateOn;
     setAutoUpdateOn(next);
@@ -487,13 +487,22 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
     catch { setAutoUpdateOn(!next); }
   };
 
-  // ─── Anonymous usage stats (default ON = opt-out; contract in TELEMETRY.md) ─
-  const [telemetryOn, setTelemetryOn] = useState<boolean>(config.telemetryEnabled !== false);
-  const toggleTelemetry = async () => {
-    const next = !telemetryOn;
-    setTelemetryOn(next);
-    try { stage({ telemetryEnabled: next }); }
-    catch { setTelemetryOn(!next); }
+  // ─── Remote model catalog (default OFF; the built-in list is used otherwise) ─
+  const [catalogAutoOn, setCatalogAutoOn] = useState<boolean>(config.modelCatalogAutoUpdate === true);
+  const toggleCatalogAuto = async () => {
+    const next = !catalogAutoOn;
+    setCatalogAutoOn(next);
+    try { stage({ modelCatalogAutoUpdate: next }); }
+    catch { setCatalogAutoOn(!next); }
+  };
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogNote, setCatalogNote] = useState('');
+  const refreshCatalogNow = async () => {
+    setCatalogBusy(true);
+    setCatalogNote('');
+    const changed = await refreshModelCatalog(true);
+    setCatalogBusy(false);
+    setCatalogNote(changed ? t('settings.general.modelCatalogUpdated') : t('settings.general.modelCatalogUnchanged'));
   };
 
   // --- Free Flow (voice dictation → message queue) ---
@@ -1166,19 +1175,20 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                              {t('settings.general.telemetry')}
+                              {t('settings.general.modelCatalog')}
                             </span>
                             <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                              {t('settings.general.telemetryDesc')}
+                              {t('settings.general.modelCatalogDesc')}{catalogNote ? ` ${catalogNote}` : ''}
                             </span>
                           </div>
-                          <PixelButton
-                            variant={telemetryOn ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={toggleTelemetry}
-                          >
-                            {telemetryOn ? t('common.on') : t('common.off')}
-                          </PixelButton>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <PixelButton variant="secondary" size="sm" onClick={refreshCatalogNow} disabled={catalogBusy}>
+                              {t('settings.general.modelCatalogRefresh')}
+                            </PixelButton>
+                            <PixelButton variant={catalogAutoOn ? 'primary' : 'secondary'} size="sm" onClick={toggleCatalogAuto}>
+                              {catalogAutoOn ? t('common.on') : t('common.off')}
+                            </PixelButton>
+                          </div>
                         </div>
                       </div>
 

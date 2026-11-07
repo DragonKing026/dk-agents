@@ -285,11 +285,11 @@ export interface HarnessConfig {
   /** Opt-in strong keep-alive (prevent-display-sleep). Mirrors main + renderer
    *  HarnessConfig so updateConfig({ strongKeepalive }) is typed across the bridge. */
   strongKeepalive?: boolean;
-  /** Auto-update from GitHub releases (default ON; Settings → General). */
+  /** Periodic update check (default OFF; Settings → General). Manual check is always available. */
   autoUpdate?: boolean;
-  /** Anonymous product analytics (default ON, opt-out; see TELEMETRY.md).
-   *  Mirrors main + renderer HarnessConfig. */
-  telemetryEnabled?: boolean;
+  /** Fetch the remote model catalog automatically (TTL 6h) instead of only on the
+   *  Settings "Refresh catalog" button. Default OFF: no request unless asked. */
+  modelCatalogAutoUpdate?: boolean;
   slackEnabled?: boolean;
   slackSigningSecret?: string;
   slackBotToken?: string;
@@ -566,15 +566,6 @@ export interface PreservedWorktreeSnapshot {
 
 const api = {
   version: __APP_VERSION__,
-
-  // ─── Analytics ───────────────────────────────────────────────────────────
-  /** Count ONE human-sent message (TELEMETRY.md → `message_sent`). Carries a
-   *  surface name and nothing else — no text, no length, no agent id — and main
-   *  accepts only 'terminal' and 'composer' here (steer and hive are counted in
-   *  main, at their own handlers). Never awaited by callers and never allowed to
-   *  throw: a telemetry hiccup must not break sending a message. */
-  trackMessageSent: (surface: 'terminal' | 'composer'): Promise<void> =>
-    ipcRenderer.invoke('analytics:messageSent', surface).then(() => undefined, () => undefined),
 
   // ─── PTY ─────────────────────────────────────────────────────────────────
   /** `cwd` in the result is the TILDE-EXPANDED absolute path main actually spawned

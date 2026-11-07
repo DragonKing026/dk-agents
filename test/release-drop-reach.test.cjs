@@ -58,7 +58,7 @@ test('the stamp write is still unconditional on a version change', () => {
 
 test('the drop fires only when the stamp actually landed', () => {
   // Otherwise an unwritable userData reopens the drop on every boot forever.
-  assert.match(updater, /if \(stamped && shouldShowReleaseDrop\(previous, current\)\)/);
+  assert.match(updater, /if \(stamped && autoUpdateEnabled\(\) && shouldShowReleaseDrop\(previous, current\)\)/);
 });
 
 test('a failed stamp write cannot skip the decision by throwing', () => {
