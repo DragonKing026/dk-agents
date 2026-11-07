@@ -317,7 +317,7 @@ export interface HarnessConfig {
   /** Which office map/cast theme the pixel office renders. Only honored when
    *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
    *  themes fall back to 'office' in the loader. */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  officeTheme?: 'office' | 'friends' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret
@@ -585,6 +585,13 @@ function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
   }
 }
 
+/** The Brooklyn Nine-Nine theme was removed; a config that still names it (or any
+ *  other theme this build does not know) falls back to the office. */
+function dropRemovedTheme(cfg: HarnessConfig): HarnessConfig {
+  const known = ['office', 'friends', 'siliconvalley', 'got', 'hogwarts'];
+  return cfg.officeTheme && !known.includes(cfg.officeTheme) ? { ...cfg, officeTheme: 'office' } : cfg;
+}
+
 export function readConfig(): HarnessConfig {
   const p = configPath();
   // No file yet = a first run with nothing to migrate; the defaults ARE the
@@ -594,7 +601,7 @@ export function readConfig(): HarnessConfig {
   try {
     const raw = readFileSync(p, 'utf8');
     const parsed = JSON.parse(raw);
-    return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed })));
+    return dropRemovedTheme(normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed }))));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });
   }

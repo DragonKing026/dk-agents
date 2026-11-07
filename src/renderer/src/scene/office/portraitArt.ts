@@ -1,4 +1,4 @@
-// Procedural portraits for The Office cast.
+// Procedural portraits for the office cast.
 //
 // These are fully custom-drawn busts (NOT recolored LimeZu sprites): each
 // character is an explicit recipe layering skin → clothing → face → facial hair

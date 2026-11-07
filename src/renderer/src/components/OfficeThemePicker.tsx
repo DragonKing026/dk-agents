@@ -17,7 +17,6 @@ interface ThemeMeta { id: ThemeId; label: string; blurb: string; built: boolean;
 const THEME_META: ThemeMeta[] = [
   { id: 'office',        label: 'The Office',         blurb: 'Dunder Mifflin — the original floor', built: true,  swatch: '#6b5a4a' },
   { id: 'friends',       label: 'Friends',            blurb: 'Central Perk coffee house',           built: false, swatch: '#9a5a32' },
-  { id: 'brooklyn99',    label: 'Brooklyn Nine-Nine', blurb: 'The 99th precinct bullpen',           built: true,  swatch: '#3a5a7a' },
   { id: 'siliconvalley', label: 'Silicon Valley',     blurb: 'The Hacker Hostel',                   built: false, swatch: '#4a6a4a' },
   { id: 'got',           label: 'Game of Thrones',    blurb: 'The Red Keep throne room',            built: false, swatch: '#6a2630' },
   { id: 'hogwarts',      label: 'Harry Potter',       blurb: 'Hogwarts great hall',                 built: false, swatch: '#39305a' },
@@ -29,7 +28,7 @@ const THEME_META: ThemeMeta[] = [
 export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState(!!config.tvShowOffices);
-  const [current, setCurrent] = useState<ThemeId>((config.officeTheme as ThemeId) ?? 'office');
+  const [current, setCurrent] = useState<ThemeId>(THEME_META.some((m) => m.id === config.officeTheme) ? (config.officeTheme as ThemeId) : 'office');
   const [pending, setPending] = useState<ThemeId | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
