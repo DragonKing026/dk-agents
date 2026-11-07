@@ -215,3 +215,91 @@ test('CLI arguments: extra args first, then the stream flags, then --model', asy
   assert.deepStrictEqual(args.slice(-2), ['--model', 'haiku']);
   assert.ok(events.length === 0 && received().length === 0);
 });
+
+// ─── round 1 review fixes ────────────────────────────────────────────────────
+
+const { validateChatModel, MAX_CHAT_MESSAGE_CHARS } = loadTs('src/main/chatSession.ts');
+const { ChatSessionMap } = loadTs('src/main/chatSessionMap.ts');
+
+const pidAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test('stop({immediate:true}) kills a process that ignores EOF and SIGTERM, without waiting for timers', async () => {
+  const { session, events } = makeSession({ killTimeoutMs: 60000 }, 'stubborn');
+  session.start();
+  session.send('a');
+  await waitFor(() => count(events, 'result') === 1, 'first result');
+  const pid = session.pid;
+  assert.ok(pid > 0 && pidAlive(pid));
+  session.stop({ immediate: true });
+  await waitFor(() => !pidAlive(pid), 'process gone', 2000);
+  await waitFor(() => count(events, 'exit') === 1, 'exit', 2000);
+  assert.strictEqual(events[events.length - 1].signal, 'SIGKILL');
+});
+
+test('stop() before start(): a later start() gives an error + exit and spawns nothing', async () => {
+  const { session, events } = makeSession();
+  session.stop();
+  assert.doesNotThrow(() => session.start());
+  assert.deepStrictEqual(kinds(events), ['error', 'exit']);
+  assert.strictEqual(session.pid, undefined);
+});
+
+test('send() above the length limit gives an error event and is not written', async () => {
+  const { session, events, received } = makeSession();
+  session.start();
+  session.send('x'.repeat(MAX_CHAT_MESSAGE_CHARS + 1));
+  assert.deepStrictEqual(kinds(events), ['error']);
+  session.stop();
+  await waitFor(() => count(events, 'exit') === 1, 'exit');
+  assert.strictEqual(received().length, 0);
+});
+
+test('validateChatModel accepts model names and rejects anything else', () => {
+  for (const ok of ['claude-haiku-5-5', 'opus', 'claude-opus-5-5[1m]', 'a.b:c_d'.replace('_', '-')]) {
+    assert.deepStrictEqual(validateChatModel(ok), { ok: true, model: ok }, ok);
+  }
+  assert.deepStrictEqual(validateChatModel(undefined), { ok: true });
+  assert.deepStrictEqual(validateChatModel(''), { ok: true });
+  for (const bad of ['--dangerous', '-x', 'a b', 'a;b', 'a'.repeat(101), 5, {}, 'x\n']) {
+    assert.strictEqual(validateChatModel(bad).ok, false, String(bad));
+  }
+});
+
+test('ChatSessionMap: a stopping or exited session counts as absent; an old exit cannot evict a newer session', () => {
+  const map = new ChatSessionMap();
+  const old = { stopping: false, alive: true, stop() { this.stopping = true; } };
+  const sender = {};
+  map.set('a', old, sender);
+  assert.strictEqual(map.get('a').session, old);
+
+  old.stop();
+  assert.strictEqual(map.get('a'), undefined); // stopping -> start must create a new one
+
+  const fresh = { stopping: false, alive: true, stop() { this.stopping = true; } };
+  map.set('a', fresh, sender);
+  map.removeIfCurrent('a', old); // the old session's late 'exit'
+  assert.strictEqual(map.get('a').session, fresh);
+  map.removeIfCurrent('a', fresh);
+  assert.strictEqual(map.get('a'), undefined);
+});
+
+test('ChatSessionMap.stopAll(immediate) stops every session, including stopping ones, and stopForSender is selective', () => {
+  const map = new ChatSessionMap();
+  const calls = [];
+  const mk = (n) => ({ stopping: false, alive: true, stop(o) { calls.push([n, !!(o && o.immediate)]); this.stopping = true; } });
+  const w1 = {};
+  const w2 = {};
+  map.set('a', mk('a'), w1);
+  map.set('b', mk('b'), w2);
+  map.stopForSender(w1);
+  assert.deepStrictEqual(calls, [['a', false]]);
+  map.stopAll({ immediate: true });
+  assert.deepStrictEqual(calls.slice(1).sort(), [['a', true], ['b', true]]);
+});
