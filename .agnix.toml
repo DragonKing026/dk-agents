@@ -1,0 +1,14 @@
+# agnix w repo DK-Agents (wzór: Narzędzia/.agnix.toml)
+severity = "Warning"
+tools = ["claude-code", "codex"]
+exclude = [
+    ".git/**",
+    "node_modules/**",
+    "out/**",
+    "dist/**",
+]
+
+[rules]
+# skille dołączone z MD (nazwy camelCase używane w kodzie aplikacji) — przegląd i ewentualna zmiana nazw w etapie 1
+# (exclude resources/skills/** nie działa dla ścieżek podanych jawnie przez hook, dlatego wyłączone reguły)
+disabled_rules = ["AS-004", "XML-001"]

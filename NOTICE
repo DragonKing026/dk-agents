@@ -1,0 +1,9 @@
+DK-Agents
+
+Based on Munder Difflin (https://github.com/HarnessMD/munder-difflin, commit
+33798d44291dd2cb3755631cc53b340c10926b28), MIT License,
+Copyright (c) Chaitanya Giri - see LICENSE.
+
+src/renderer/src/assets/maps/office.tmj - from shahar061/the-office (ISC).
+
+Pixel-art tilesets of the original are NOT included.
