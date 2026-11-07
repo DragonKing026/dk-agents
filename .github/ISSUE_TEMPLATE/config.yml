@@ -1,0 +1,9 @@
+---
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/DragonKing026/dk-agents/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
+  - name: Original project (Munder Difflin)
+    url: https://github.com/HarnessMD/munder-difflin
+    about: For an app maintained by a larger team, see the original project.
