@@ -6,4 +6,12 @@ Copyright (c) Chaitanya Giri - see LICENSE.
 
 src/renderer/src/assets/maps/office.tmj - from shahar061/the-office (ISC).
 
-Pixel-art tilesets of the original are NOT included.
+Fonts bundled in src/renderer/src/assets/fonts/ (SIL Open Font License 1.1;
+full attributions and license text in src/renderer/src/assets/fonts/LICENSE.txt):
+  - Inter, Copyright (c) 2016 The Inter Project Authors
+  - JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+  - Press Start 2P, Copyright (c) 2012 Cody "CodeMan38" Boisclair
+
+Pixel-art tilesets of the original are NOT included. The tilesets, the logo and
+the app icon in this repository are generated placeholders
+(tools/placeholder-tiles.cjs).

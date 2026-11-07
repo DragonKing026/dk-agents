@@ -13,6 +13,7 @@ import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import type { IntegrationRecord } from '../shared/integrations';
+import { normalizeOfficeTheme } from '../shared/officeTheme';
 import {
   DEFAULT_CONTEXT_TRIGGER,
   DEFAULT_ORG_TRIGGER,
@@ -317,7 +318,7 @@ export interface HarnessConfig {
   /** Which office map/cast theme the pixel office renders. Only honored when
    *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
    *  themes fall back to 'office' in the loader. */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
+  officeTheme?: 'office' | 'friends' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret
@@ -585,6 +586,14 @@ function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
   }
 }
 
+/** The Brooklyn Nine-Nine theme was removed; a config that still names it (or any
+ *  other theme this build does not know) falls back to the office. */
+function dropRemovedTheme(cfg: HarnessConfig): HarnessConfig {
+  if (!cfg.officeTheme) return cfg;
+  const theme = normalizeOfficeTheme(cfg.officeTheme) as HarnessConfig['officeTheme'];
+  return theme === cfg.officeTheme ? cfg : { ...cfg, officeTheme: theme };
+}
+
 export function readConfig(): HarnessConfig {
   const p = configPath();
   // No file yet = a first run with nothing to migrate; the defaults ARE the
@@ -594,7 +603,7 @@ export function readConfig(): HarnessConfig {
   try {
     const raw = readFileSync(p, 'utf8');
     const parsed = JSON.parse(raw);
-    return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed })));
+    return dropRemovedTheme(normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed }))));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });
   }

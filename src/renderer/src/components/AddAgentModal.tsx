@@ -6,6 +6,7 @@ import { SpritePortrait } from './SpritePortrait';
 import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
 import { useStore, type Agent } from '@/store/store';
+import { randomAgentName } from '@shared/agentNames';
 import { OFFICE_CAST, DEFAULT_CHARACTER, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
@@ -91,7 +92,7 @@ Return EXACTLY this shape (omit optional fields you don't need; keep the spec st
 
 {
   "spec": "munder-difflin/hire@1",
-  "name": "Jim",
+  "name": "Mateo",
   "description": "one-line role — what this agent is for",
   "goal": "standing directive injected on every prompt — specific and outcome-oriented",
   "provider": "claude",
@@ -188,7 +189,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const initialProvider = inferAgentProvider(config.defaultCommand);
   const initialModel = isClaudeProvider(initialProvider) ? config.defaultModel : undefined;
 
-  const [name, setName] = useState(pendingHire?.name ?? 'Jim');
+  const [name, setName] = useState(() => pendingHire?.name ?? randomAgentName(useStore.getState().agents.map(a => a.name)));
   const [character, setCharacter] = useState<OfficeCharacterName>(knownCharacter(pendingHire?.character));
   const [accent, setAccent] = useState<AccentColorName>(knownAccent(pendingHire?.accent));
   const [cwd, setCwd] = useState<string>(config.registeredRepos[0] ?? '');

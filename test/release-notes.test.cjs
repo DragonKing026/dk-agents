@@ -213,11 +213,10 @@ test('code fences, comments and quoted callouts are handled', () => {
   for (const line of digest) assert.doesNotMatch(line, /npm install/);
 });
 
-test("the project's own RELEASE.md digests to something a toast can hold", () => {
-  // The body electron-updater actually hands us is this file (see
-  // .github/workflows/release.yml → `body_path: RELEASE.md`), so it is the one
-  // fixture guaranteed to stay realistic.
-  const body = fs.readFileSync(path.resolve(__dirname, '..', 'RELEASE.md'), 'utf8');
+test('a realistic release body digests to something a toast can hold', () => {
+  // The body electron-updater hands us is the GitHub release body; this fixture
+  // has the same shape (tagline, What's new, download table, build section).
+  const body = fs.readFileSync(path.resolve(__dirname, 'fixtures', 'release-body.md'), 'utf8');
   const digest = summarizeReleaseNotes(body);
 
   assert.ok(digest.length > 0, 'the shipped release notes must produce a digest');
