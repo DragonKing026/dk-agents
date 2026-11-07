@@ -31,6 +31,12 @@ node --test test/*.test.cjs   # tests
 npm run dist:linux   # build a Linux package
 ```
 
+## Contributing
+
+Issues and improvement requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems
+privately as described in [SECURITY.md](SECURITY.md). Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md). Accessibility status: [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The copyright of the original project stays with its author.

@@ -1,0 +1,27 @@
+---
+name: Feature request
+description: Suggest an improvement or a new feature
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        DK-Agents is maintained by one person for their own workflow, so there is no promise a request will be
+        implemented — but good ideas are welcome. Planned work is listed in the milestones.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working. Alternatives you considered are useful too.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Agent CLIs, project type (e.g. WordPress with DDEV), screenshots or mock-ups.

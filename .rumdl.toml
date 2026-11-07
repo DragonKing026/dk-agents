@@ -1,0 +1,3 @@
+# rumdl (Markdown lint) — styl repo: wiersze do 120 znaków (README, dokumentacja)
+[MD013]
+line-length = 120
