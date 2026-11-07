@@ -13,6 +13,7 @@ import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import type { IntegrationRecord } from '../shared/integrations';
+import { normalizeOfficeTheme } from '../shared/officeTheme';
 import {
   DEFAULT_CONTEXT_TRIGGER,
   DEFAULT_ORG_TRIGGER,
@@ -588,8 +589,9 @@ function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
 /** The Brooklyn Nine-Nine theme was removed; a config that still names it (or any
  *  other theme this build does not know) falls back to the office. */
 function dropRemovedTheme(cfg: HarnessConfig): HarnessConfig {
-  const known = ['office', 'friends', 'siliconvalley', 'got', 'hogwarts'];
-  return cfg.officeTheme && !known.includes(cfg.officeTheme) ? { ...cfg, officeTheme: 'office' } : cfg;
+  if (!cfg.officeTheme) return cfg;
+  const theme = normalizeOfficeTheme(cfg.officeTheme) as HarnessConfig['officeTheme'];
+  return theme === cfg.officeTheme ? cfg : { ...cfg, officeTheme: theme };
 }
 
 export function readConfig(): HarnessConfig {

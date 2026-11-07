@@ -19,7 +19,8 @@ loads.
 
 ## Build
 
-Requires Node.js and npm.
+Requires Node.js and npm. The native modules are compiled during `npm ci`, so a C++ compiler, make and python3 are
+needed; on Fedora: `sudo dnf install gcc-c++ make python3`.
 
 ```bash
 npm ci               # install dependencies (native modules are rebuilt)
