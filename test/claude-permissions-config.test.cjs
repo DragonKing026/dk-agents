@@ -26,7 +26,7 @@ require.cache[electron] = {
   exports: { app: { getPath: () => userData } }
 };
 
-const { ensureClaudePermissionsAccepted } = loadTs('src/main/config.ts');
+const { ensureClaudePermissionsAccepted, claudeSetupWrites } = loadTs('src/main/config.ts');
 const settingsDir = path.join(home, '.claude');
 const settingsPath = path.join(settingsDir, 'settings.json');
 const projectConfigPath = path.join(home, '.claude.json');
@@ -71,7 +71,7 @@ test('preserves malformed Claude config files byte-for-byte', () => {
     warnings.push(args.map(String).join(' '));
   };
   try {
-    ensureClaudePermissionsAccepted(cwd);
+    ensureClaudePermissionsAccepted(cwd, true);
   } finally {
     console.warn = originalWarn;
   }
@@ -95,7 +95,7 @@ test('merges required fields into valid configs without losing unrelated data', 
     }
   }, null, 2));
 
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, 'utf8')), {
     env: { CUSTOM_VALUE: 'preserve-me' },
@@ -117,7 +117,7 @@ test('merges required fields into valid configs without losing unrelated data', 
 });
 
 test('creates minimal config files when they are missing', () => {
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, 'utf8')), {
     skipDangerousModePermissionPrompt: true,
@@ -133,7 +133,7 @@ test('a malformed settings file does not prevent safe project trust updates', ()
   writeSettings(malformedSettings);
   fs.writeFileSync(projectConfigPath, JSON.stringify({ custom: 'keep' }), 'utf8');
 
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   assert.equal(fs.readFileSync(settingsPath, 'utf8'), malformedSettings);
   assert.deepEqual(JSON.parse(fs.readFileSync(projectConfigPath, 'utf8')), {
@@ -148,8 +148,8 @@ test('does not rewrite configs that already contain every required field', () =>
   writeSettings(settings);
   fs.writeFileSync(projectConfigPath, projectConfig, 'utf8');
 
-  ensureClaudePermissionsAccepted(cwd);
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   assert.equal(fs.readFileSync(settingsPath, 'utf8'), settings);
   assert.equal(fs.readFileSync(projectConfigPath, 'utf8'), projectConfig);
@@ -159,7 +159,7 @@ test('preserves existing config files with unsafe JSON root shapes', () => {
   writeSettings('null\n');
   fs.writeFileSync(projectConfigPath, '["keep"]\n', 'utf8');
 
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   assert.equal(fs.readFileSync(settingsPath, 'utf8'), 'null\n');
   assert.equal(fs.readFileSync(projectConfigPath, 'utf8'), '["keep"]\n');
@@ -174,9 +174,40 @@ test('repairs a config trusted only under the raw path spelling', () => {
     projects: { [cwd]: { hasTrustDialogAccepted: true } }
   }), 'utf8');
 
-  ensureClaudePermissionsAccepted(cwd);
+  ensureClaudePermissionsAccepted(cwd, true);
 
   const projects = JSON.parse(fs.readFileSync(projectConfigPath, 'utf8')).projects;
   assert.equal(projects[cwd.replace(/\\/g, '/')]?.hasTrustDialogAccepted, true);
   assert.equal(projects[cwd]?.hasTrustDialogAccepted, true);
+});
+
+test('claudeSetupWrites: global skip-prompts only with autoMode true', () => {
+  assert.deepEqual(claudeSetupWrites({ autoMode: false }), { globalSkipPrompts: false, trustProject: true });
+  assert.deepEqual(claudeSetupWrites({ autoMode: true }), { globalSkipPrompts: true, trustProject: true });
+  assert.equal(claudeSetupWrites({}).globalSkipPrompts, false);
+});
+
+test('autoMode false never writes ~/.claude/settings.json but still trusts the folder', () => {
+  ensureClaudePermissionsAccepted(cwd, false);
+  assert.equal(fs.existsSync(settingsPath), false);
+  assert.deepEqual(JSON.parse(fs.readFileSync(projectConfigPath, 'utf8')), { projects: trustedCwd() });
+});
+
+test('autoMode omitted is treated as false', () => {
+  ensureClaudePermissionsAccepted(cwd);
+  assert.equal(fs.existsSync(settingsPath), false);
+});
+
+test('autoMode false leaves an existing settings.json untouched', () => {
+  const s = '{"env":{"A":"1"}}\n';
+  writeSettings(s);
+  ensureClaudePermissionsAccepted(cwd, false);
+  assert.equal(fs.readFileSync(settingsPath, 'utf8'), s);
+});
+
+test('autoMode true writes both skip flags', () => {
+  ensureClaudePermissionsAccepted(cwd, true);
+  const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  assert.equal(s.skipDangerousModePermissionPrompt, true);
+  assert.equal(s.skipAutoPermissionPrompt, true);
 });

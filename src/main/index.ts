@@ -2314,7 +2314,7 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
     ...(geom && geom.x !== undefined && geom.y !== undefined ? { x: geom.x, y: geom.y } : {}),
     minWidth: MIN_WIN.width,
     minHeight: MIN_WIN.height,
-    title: isFloor ? 'Munder Difflin — Floor' : 'Munder Difflin',
+    title: isFloor ? 'DK-Agents — Floor' : 'DK-Agents',
     backgroundColor: '#FFF8E7',
     titleBarStyle: 'hiddenInset',
     show: false,
@@ -2931,12 +2931,12 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     // initial orientation prompt is never mistaken for an idle agent.
     workerWake.noteSpawn(opts.id);
   }
-  // Pre-accept Claude Code's bypass-mode warning + folder-trust dialog so the
-  // agent (spawned with --permission-mode bypassPermissions) doesn't stall on an
+  // Pre-accept Claude Code's folder-trust dialog (always) and, only with autoMode
+  // on, the global bypass-mode warning, so the agent doesn't stall on an
   // interactive prompt it can't answer and exit code 1. Best-effort, never blocks.
   // Claude-only — other CLIs handle their own permission UX.
   if (claudeProvider) {
-    try { ensureClaudePermissionsAccepted(opts.cwd); } catch { /* never block spawn */ }
+    try { ensureClaudePermissionsAccepted(opts.cwd, readConfig().autoMode === true); } catch { /* never block spawn */ }
   }
   // Suppress first-run interactive prompts for providers that need it (e.g. Codex
   // directory-trust gate via CODEX_NON_INTERACTIVE). Merges into any env already

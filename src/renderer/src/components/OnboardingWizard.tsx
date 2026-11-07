@@ -99,7 +99,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
   const [home, setHome] = useState<string>('');
   const [repos, setRepos] = useState<string[]>([]);
-  const [autoMode, setAutoMode] = useState<boolean>(true);
+  const [autoMode, setAutoMode] = useState<boolean>(false);
   const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
   const [godModel, setGodModel] = useState<string | undefined>(
     providerPreset('claude').recommendedOrchestratorModel
@@ -170,12 +170,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // field rendered empty "— leaving the copy above promising a default the user
   // could not accept, and Finish failing with "Pick a harness home folder first."
   //
-  // Suggest the literal `~/HarnessAgents` instead. That is exactly the string
+  // Suggest the literal `~/.local/share/dk-agents` instead. That is exactly the string
   // #140's normalizeHiveHome()/expandTilde() were built to absorb: it is expanded
   // at the config-write boundary AND at ensureHarnessHome's mkdir, so every
   // downstream reader still sees one absolute path. No new IPC surface.
   useEffect(() => {
-    if (!home) setHome('~/HarnessAgents');
+    if (!home) setHome('~/.local/share/dk-agents');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

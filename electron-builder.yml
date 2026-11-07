@@ -1,5 +1,5 @@
-appId: in.munderdiffl.app
-productName: Munder Difflin
+appId: io.github.dragonking026.dkagents
+productName: DK-Agents
 copyright: Copyright © 2026 Chaitanya Giri
 
 # Where electron-updater looks for new versions (latest*.yml + assets on GitHub
@@ -38,7 +38,7 @@ afterSign: build/notarize.cjs
 # Register the munderdifflin:// URL scheme (shareable-hires deep link) in the
 # packaged app: CFBundleURLTypes on macOS, registry entries via NSIS on Windows.
 protocols:
-  - name: Munder Difflin
+  - name: DK-Agents
     schemes:
       - munderdifflin
 
@@ -92,15 +92,15 @@ mac:
   # the privacy prompt and, for a signed app, remembers the grant — so the user
   # is asked ONCE instead of on every agent action.
   extendInfo:
-    NSDocumentsFolderUsageDescription: "Munder Difflin runs your Claude Code agents, which read and write files in the project folders you point them at."
-    NSDesktopFolderUsageDescription: "Munder Difflin's agents may work on projects located on your Desktop."
-    NSDownloadsFolderUsageDescription: "Munder Difflin's agents may work on projects located in your Downloads."
-    NSRemovableVolumesUsageDescription: "Munder Difflin's agents may work on projects located on external volumes."
-    NSNetworkVolumesUsageDescription: "Munder Difflin's agents may work on projects located on network volumes."
+    NSDocumentsFolderUsageDescription: "DK-Agents runs your Claude Code agents, which read and write files in the project folders you point them at."
+    NSDesktopFolderUsageDescription: "DK-Agents agents may work on projects located on your Desktop."
+    NSDownloadsFolderUsageDescription: "DK-Agents agents may work on projects located in your Downloads."
+    NSRemovableVolumesUsageDescription: "DK-Agents agents may work on projects located on external volumes."
+    NSNetworkVolumesUsageDescription: "DK-Agents agents may work on projects located on network volumes."
     # The microphone is used by two opt-in, off-by-default voice features: Free
     # Flow dictation (Groq transcription) and Realtime Michael (live voice chat
     # with the orchestrator via OpenAI). Mic access only happens while one is on.
-    NSMicrophoneUsageDescription: "Munder Difflin uses your microphone only for its opt-in voice features: Free Flow dictation (transcribed by Groq into the message queue) and talking to Michael in real time (streamed to OpenAI). The mic is off unless you turn one of these on."
+    NSMicrophoneUsageDescription: "DK-Agents uses your microphone only for its opt-in voice features: Free Flow dictation (transcribed by Groq into the message queue) and talking to Michael in real time (streamed to OpenAI). The mic is off unless you turn one of these on."
   # Hardened runtime + entitlements so the spawned `claude` agents inherit this
   # app's TCC responsibility (one grant covers them all) and node-pty can load.
   hardenedRuntime: true
@@ -130,10 +130,10 @@ mac:
       arch: [universal]
     - target: zip
       arch: [universal]
-  artifactName: Munder-Difflin-${version}-mac-${arch}.${ext}
+  artifactName: DK-Agents-${version}-mac-${arch}.${ext}
 
 dmg:
-  title: Munder Difflin ${version}
+  title: DK-Agents ${version}
 
 # ---- Windows ----
 win:
@@ -148,11 +148,11 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: Munder-Difflin-${version}-win-x64-setup.exe
-  shortcutName: Munder Difflin
+  artifactName: DK-Agents-${version}-win-x64-setup.exe
+  shortcutName: DK-Agents
 
 portable:
-  artifactName: Munder-Difflin-${version}-win-x64-portable.exe
+  artifactName: DK-Agents-${version}-win-x64-portable.exe
 
 # ---- Linux ----
 linux:
@@ -161,4 +161,4 @@ linux:
   target:
     - target: AppImage
       arch: [x64]
-  artifactName: Munder-Difflin-${version}-linux-x86_64.AppImage
+  artifactName: DK-Agents-${version}-linux-x86_64.AppImage

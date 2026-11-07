@@ -33,8 +33,10 @@ export interface HiddenClaudeOptions {
   cwd: string;
   /** Base claude command/binary. Defaults to 'claude'. */
   command?: string;
-  /** Tools the session is forbidden to use. Defaults to ['Edit','Write','NotebookEdit']. */
+  /** Tools the session is forbidden to use. Defaults to DEFAULT_DISALLOWED_TOOLS (no edits, no Bash). */
   disallowedTools?: string[];
+  /** Tools auto-allowed without a prompt. Defaults to DEFAULT_ALLOWED_TOOLS (read-only). */
+  allowedTools?: string[];
   /** Directories added via --add-dir (for context gathering). */
   addDirs?: string[];
   /** Hard cap ms before forcing prompt send regardless of boot activity. Default 7000. */
@@ -96,6 +98,32 @@ function extractLastAssistantText(cwd: string, spawnedAt: number): string | null
   } catch { return null; }
 }
 
+/** Tools the hidden session may use without asking: read-only file access only. */
+export const DEFAULT_ALLOWED_TOOLS = ['Read', 'Grep', 'Glob'];
+/** Tools the hidden session may never use. Bash is denied: with it, any command would run unprompted. */
+export const DEFAULT_DISALLOWED_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'];
+
+/**
+ * CLI arguments for a hidden session. Deliberately NOT `bypassPermissions`:
+ * the default permission mode denies (never silently runs) anything outside
+ * the read-only allow-list, and the deny-list stays in force on top of it.
+ */
+export function buildHiddenClaudeArgs(opts: {
+  model: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  addDirs?: string[];
+}): string[] {
+  const args: string[] = [
+    '--model', opts.model,
+    '--permission-mode', 'default',
+    '--allowedTools', ...(opts.allowedTools ?? DEFAULT_ALLOWED_TOOLS),
+    '--disallowedTools', ...(opts.disallowedTools ?? DEFAULT_DISALLOWED_TOOLS),
+  ];
+  for (const d of opts.addDirs ?? []) args.push('--add-dir', d);
+  return args;
+}
+
 export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Promise<HiddenClaudeResult> {
   return new Promise((resolve) => {
     if (!prompt.trim()) { resolve({ ok: false, error: 'empty prompt' }); return; }
@@ -109,15 +137,14 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
 
     const binary = (opts.command || 'claude').trim().split(/\s+/)[0] || 'claude';
     const exe = resolveCommand(binary);
-    const disallowed = opts.disallowedTools ?? ['Edit', 'Write', 'NotebookEdit'];
     const addDirs = (opts.addDirs ?? []).filter((d) => d && existsSync(d));
 
-    const args: string[] = [
-      '--model', opts.model,
-      '--permission-mode', 'bypassPermissions',
-      '--disallowedTools', ...disallowed,
-    ];
-    for (const d of addDirs) { args.push('--add-dir', d); }
+    const args = buildHiddenClaudeArgs({
+      model: opts.model,
+      allowedTools: opts.allowedTools,
+      disallowedTools: opts.disallowedTools,
+      addDirs,
+    });
 
     const bootCapMs = opts.bootCapMs ?? 7000;
     const idleMs = opts.idleMs ?? 3500;
