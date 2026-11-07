@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync,
@@ -2321,6 +2321,8 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
       // the narrow contextBridge/IPC surface owned by the main process.
       sandbox: true,
       contextIsolation: true,
+      // No spellcheck: Chromium would download a dictionary from Google on first run.
+      spellcheck: false,
       nodeIntegration: false,
       // The renderer runs the hive's heartbeat loops (inbox nudge, message
       // flush, telemetry polls). Chromium throttles timers in occluded windows
@@ -5316,6 +5318,13 @@ function onSystemResume(reason: string): void {
 }
 
 app.whenReady().then(() => {
+  // Chromium downloads a spellcheck dictionary (.bdic) from Google's gvt1.com on
+  // the first run for the system locale. DK-Agents makes no request the user did
+  // not ask for, so spellcheck is off (the built-in dictionary download is the
+  // only thing that needs the network).
+  session.defaultSession.setSpellCheckerEnabled(false);
+  session.defaultSession.setSpellCheckerLanguages([]);
+
   // Realtime Michael mic-gate hygiene (rt-8 / Pam rt-10 nit): the voice session
   // opens the mic permission gate by persisting realtimeVoiceEnabled=true and
   // closes it on disconnect — but a hard crash/reload mid-session skips that
