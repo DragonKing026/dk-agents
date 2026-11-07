@@ -422,7 +422,7 @@ const DEFAULTS: HarnessConfig = {
   harnessHome: null,
   recentHives: [],
   registeredRepos: [],
-  autoMode: true,
+  autoMode: false,
   orchestratorMaySpawn: false,
   defaultCommand: 'claude',
   godProvider: 'claude',

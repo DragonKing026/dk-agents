@@ -280,7 +280,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
     setSimpleMode(next);
     stage({ audience: next ? 'non-technical' : 'technical' } as Partial<HarnessConfig>);
   };
-  const [autoModeOn, setAutoModeOn] = useState<boolean>(cfgX.autoMode !== false);
+  const [autoModeOn, setAutoModeOn] = useState<boolean>(cfgX.autoMode === true);
   const toggleAutoMode = async () => {
     const next = !autoModeOn;
     setAutoModeOn(next);

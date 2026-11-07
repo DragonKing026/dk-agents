@@ -1,11 +1,12 @@
 {
-  "name": "munder-difflin",
+  "name": "dk-agents",
+  "productName": "DK-Agents",
   "version": "0.4.6",
   "private": true,
-  "description": "Clones for you and your team, working 24/7 — a free, local-first multi-agent harness that turns the CLI coding agent you already run into a clone of you, coordinating an office of agents on your machine.",
+  "description": "Desktop app for working with a team of AI coding agents, each running as a real session in its own CLI.",
   "main": "out/main/index.js",
-  "author": "Chaitanya Giri",
-  "homepage": "https://munderdiffl.in/",
+  "author": "DK-Agents contributors",
+  "homepage": "https://github.com/DragonKing026/dk-agents",
   "repository": {
     "type": "git",
     "url": "https://github.com/DragonKing026/dk-agents.git"
