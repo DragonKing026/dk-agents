@@ -157,3 +157,20 @@ test('a user message after ended starts over as running', () => {
   const t = ct.addUserMessage(run([{ kind: 'exit', code: 0, signal: null }]), 'again');
   assert.strictEqual(t.status, 'running');
 });
+
+test('permission_cancelled marks the card cancelled and resumes running', () => {
+  const t = run([
+    { kind: 'permission_request', requestId: 'r1', toolName: 'Write', input: {} },
+    { kind: 'permission_request', requestId: 'r2', toolName: 'Bash', input: {} },
+    { kind: 'permission_cancelled', requestId: 'r1' }
+  ]);
+  assert.strictEqual(t.status, 'waiting', 'another permission is still pending');
+  const t2 = ct.applyChatEvent(t, { kind: 'permission_cancelled', requestId: 'r2' });
+  assert.strictEqual(t2.status, 'running');
+  assert.deepStrictEqual(t2.items.map((i) => i.state), ['cancelled', 'cancelled']);
+});
+
+test('permission_cancelled for an unknown id leaves the transcript unchanged', () => {
+  const t = run([{ kind: 'permission_request', requestId: 'r1', toolName: 'Write', input: {} }]);
+  assert.deepStrictEqual(ct.applyChatEvent(t, { kind: 'permission_cancelled', requestId: 'zz' }), t);
+});

@@ -117,6 +117,9 @@ export function parseClaudeLine(line: string): ChatEvent[] {
       return [ev];
     }
 
+    case 'control_cancel_request':
+      return typeof raw.request_id === 'string' ? [{ kind: 'permission_cancelled', requestId: raw.request_id }] : [];
+
     case 'result': {
       const ev: ChatEvent = {
         kind: 'result',

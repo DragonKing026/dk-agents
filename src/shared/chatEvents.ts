@@ -5,6 +5,7 @@ export type ChatEvent =
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
   | { kind: 'tool_result'; toolUseId: string; content: string; isError: boolean }
   | { kind: 'permission_request'; requestId: string; toolName: string; input: unknown; toolUseId?: string }
+  | { kind: 'permission_cancelled'; requestId: string }
   | { kind: 'result'; isError: boolean; text?: string; costUsd?: number; durationMs?: number }
   | { kind: 'error'; message: string }
   | { kind: 'exit'; code: number | null; signal: string | null };

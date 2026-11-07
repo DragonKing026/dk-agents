@@ -119,6 +119,15 @@ export function applyChatEvent(t: ChatTranscript, ev: ChatEvent): ChatTranscript
         status: 'waiting'
       };
 
+    case 'permission_cancelled': {
+      const known = t.items.some((i) => i.type === 'permission' && i.requestId === ev.requestId && i.state === 'pending');
+      if (!known) return t;
+      const items = t.items.map((i) =>
+        i.type === 'permission' && i.requestId === ev.requestId && i.state === 'pending' ? { ...i, state: 'cancelled' as const } : i
+      );
+      return { ...t, items, status: t.status === 'waiting' && !hasPending(items) ? 'running' : t.status };
+    }
+
     case 'result': {
       const base: ChatTranscript = { ...t, items: cancelPending(t.items), status: 'idle' };
       return ev.isError

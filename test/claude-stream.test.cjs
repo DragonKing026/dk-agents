@@ -110,6 +110,14 @@ test('unknown event types and non-can_use_tool control requests are ignored', ()
   assert.deepStrictEqual(cs.parseClaudeLine('   '), []);
 });
 
+test('control_cancel_request maps to permission_cancelled', () => {
+  assert.deepStrictEqual(
+    cs.parseClaudeLine('{"type":"control_cancel_request","request_id":"r9"}'),
+    [{ kind: 'permission_cancelled', requestId: 'r9' }]
+  );
+  assert.deepStrictEqual(cs.parseClaudeLine('{"type":"control_cancel_request"}'), []);
+});
+
 test('invalid JSON becomes one error event; non-object JSON is ignored', () => {
   const evs = cs.parseClaudeLine('nie json');
   assert.strictEqual(evs.length, 1);
