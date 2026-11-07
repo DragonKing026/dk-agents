@@ -21,7 +21,8 @@ export function ChatPanel({ agent }: ChatPanelProps) {
       <Centered>{t('chat.unsupported')}</Centered>
     );
   }
-  return <ClaudeChat agent={agent} />;
+  // key: the unsent draft is component state and must not follow the user to another agent.
+  return <ClaudeChat key={agent.id} agent={agent} />;
 }
 
 function ClaudeChat({ agent }: ChatPanelProps) {

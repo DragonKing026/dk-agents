@@ -7,6 +7,7 @@ import {
   resolvePermission,
   type ChatTranscript
 } from '@shared/chatTranscript';
+import { StopTracker } from '@shared/chatStopTracker';
 
 /**
  * Chat transcripts live in this module, not in component state: the panel unmounts when the user
@@ -16,8 +17,8 @@ import {
 const transcripts = new Map<string, ChatTranscript>();
 /** Agents whose main-process session is believed alive (set on a successful start, cleared on `exit`). */
 const live = new Set<string>();
-/** Agents the user pressed Stop on: their `exit` (SIGTERM, code 143...) is expected, so it shows no error notice. */
-const stopRequested = new Set<string>();
+/** Stop requests: an expected `exit` shows no error notice; a Stop during `chat:start` stops the session once it started. */
+const stops = new StopTracker();
 /** In-flight `chat:start` calls, so a quick second message waits for the first start. */
 const starting = new Map<string, Promise<boolean>>();
 const listeners = new Set<() => void>();
@@ -37,7 +38,7 @@ function update(agentId: string, fn: (t: ChatTranscript) => ChatTranscript): voi
 function apply(agentId: string, ev: ChatEvent): void {
   if (ev.kind === 'exit') {
     live.delete(agentId);
-    if (stopRequested.delete(agentId)) ev = { kind: 'exit', code: null, signal: null };
+    if (stops.consumeExit(agentId)) ev = { kind: 'exit', code: null, signal: null };
   }
   update(agentId, (t) => applyChatEvent(t, ev));
 }
@@ -56,12 +57,18 @@ async function ensureStarted(agentId: string, model: string | undefined): Promis
   if (live.has(agentId)) return true;
   const pending = starting.get(agentId);
   if (pending) return pending;
+  stops.beginStart(agentId);
   const p = (async () => {
     try {
       const res = await window.cth.chat.start(agentId, model ? { model } : undefined);
       if (!res.ok) {
         apply(agentId, { kind: 'error', message: res.error ?? 'Could not start the chat session.' });
         apply(agentId, { kind: 'exit', code: null, signal: null });
+        return false;
+      }
+      if (stops.consumeAbortStart(agentId)) {
+        // Stop was pressed while the session was starting: stop it now; its `exit` ends the transcript.
+        void window.cth.chat.stop(agentId);
         return false;
       }
       live.add(agentId);
@@ -125,9 +132,11 @@ export function useChat(agentId: string, model?: string): UseChat {
   );
 
   const stop = useCallback(() => {
-    stopRequested.add(agentId);
+    const inFlight = starting.has(agentId);
+    stops.requestStop(agentId, inFlight);
+    if (inFlight) return; // the start handler stops the session as soon as it exists
     void window.cth.chat.stop(agentId).then((res) => {
-      if (!res.ok) stopRequested.delete(agentId);
+      if (!res.ok) stops.cancelStop(agentId);
     });
   }, [agentId]);
 
