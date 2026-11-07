@@ -93,10 +93,10 @@ mac:
   # is asked ONCE instead of on every agent action.
   extendInfo:
     NSDocumentsFolderUsageDescription: "DK-Agents runs your Claude Code agents, which read and write files in the project folders you point them at."
-    NSDesktopFolderUsageDescription: "the DK-Agents agents may work on projects located on your Desktop."
-    NSDownloadsFolderUsageDescription: "the DK-Agents agents may work on projects located in your Downloads."
-    NSRemovableVolumesUsageDescription: "the DK-Agents agents may work on projects located on external volumes."
-    NSNetworkVolumesUsageDescription: "the DK-Agents agents may work on projects located on network volumes."
+    NSDesktopFolderUsageDescription: "DK-Agents agents may work on projects located on your Desktop."
+    NSDownloadsFolderUsageDescription: "DK-Agents agents may work on projects located in your Downloads."
+    NSRemovableVolumesUsageDescription: "DK-Agents agents may work on projects located on external volumes."
+    NSNetworkVolumesUsageDescription: "DK-Agents agents may work on projects located on network volumes."
     # The microphone is used by two opt-in, off-by-default voice features: Free
     # Flow dictation (Groq transcription) and Realtime Michael (live voice chat
     # with the orchestrator via OpenAI). Mic access only happens while one is on.

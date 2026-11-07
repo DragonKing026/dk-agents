@@ -6,7 +6,13 @@ const loadTs = require('./load-ts.cjs');
 
 // hiddenClaude.ts imports node-pty and electron-adjacent modules; stub the native one.
 const ptyPath = require.resolve('node-pty');
-require.cache[ptyPath] = { id: ptyPath, filename: ptyPath, loaded: true, exports: {} };
+const spawned = [];
+require.cache[ptyPath] = {
+  id: ptyPath, filename: ptyPath, loaded: true,
+  // Capture the argv runHiddenClaude really hands to the PTY, then fail the spawn
+  // so the call settles immediately without a real claude.
+  exports: { spawn: (file, args) => { spawned.push({ file, args }); throw new Error('stub: no real spawn'); } }
+};
 
 const { buildHiddenClaudeArgs, DEFAULT_ALLOWED_TOOLS, DEFAULT_DISALLOWED_TOOLS } = loadTs('src/main/hiddenClaude.ts');
 
@@ -37,4 +43,16 @@ test('default allow-list is read-only and Bash is denied', () => {
 test('add-dir entries are passed through', () => {
   const args = buildHiddenClaudeArgs({ model: 'm', addDirs: ['/a'] });
   assert.deepEqual(after(args, '--add-dir'), ['/a']);
+});
+
+test('runHiddenClaude spawns with exactly the args buildHiddenClaudeArgs produces', async () => {
+  const { runHiddenClaude } = loadTs('src/main/hiddenClaude.ts');
+  spawned.length = 0;
+  const r = await runHiddenClaude('hello', { model: 'm', cwd: process.cwd(), command: 'claude' });
+  assert.equal(r.ok, false);
+  assert.equal(spawned.length, 1);
+  const args = spawned[0].args;
+  assert.deepEqual(args, buildHiddenClaudeArgs({ model: 'm' }));
+  assert.doesNotMatch(args.join(' '), /bypassPermissions|dangerously-skip-permissions|yolo/);
+  assert.ok(after(args, '--disallowedTools').includes('Bash'));
 });
