@@ -288,11 +288,13 @@ export interface HarnessConfig {
    *  AC). Default OFF: the honest default is "survive sleep + catch up once on
    *  resume" (see the powerMonitor 'resume' handler), not "stay awake". */
   strongKeepalive?: boolean;
-  /** Auto-update from GitHub releases (v0.3.4). Default ON. Packaged builds
-   *  check on boot + every ~6h, download in the background, and show a
-   *  "restart to update" toast — installation is always user-initiated. OFF
-   *  disables checking entirely. (Mirrored in preload + renderer config.) */
+  /** Periodic update check against GitHub releases. Default OFF (opt-in): no check
+   *  at startup; a manual check is always available in Settings → Updates.
+   *  (Mirrored in preload + renderer config.) */
   autoUpdate?: boolean;
+  /** Fetch the remote model catalog automatically (TTL 6h) instead of only on the
+   *  Settings "Refresh catalog" button. Default OFF: no request unless asked. */
+  modelCatalogAutoUpdate?: boolean;
   /** Multi-window "floors": expose a New Floor action that opens additional
    *  windows, each an independent office with isolated renderer state (its own
    *  session partition) and per-window PTY routing. ON by default (v0.3.4: code
@@ -306,11 +308,6 @@ export interface HarnessConfig {
    *  ("theme" key) at spawn so the TUI's truecolor palette matches. Scoped to
    *  harness agents only; the user's global Claude theme is never touched. */
   terminalTheme?: 'light' | 'dark';
-  /** Anonymous product analytics (PostHog) — the exact events/properties are
-   *  documented in TELEMETRY.md. Default ON (opt-out, like autoUpdate); builds
-   *  without an injected key and environments with DO_NOT_TRACK set never send
-   *  regardless of this flag. (Mirrored in preload + renderer config.) */
-  telemetryEnabled?: boolean;
   /** Master flag for the TV-show office themes feature (Settings theme picker +
    *  destructive switch flow). Default false = the picker is hidden and the
    *  office renders as today (zero behavior change). */
@@ -446,8 +443,8 @@ const DEFAULTS: HarnessConfig = {
   missions: [OPS_STANDUP_MISSION],
   notifications: false,
   strongKeepalive: false,
-  autoUpdate: true,
-  telemetryEnabled: true,
+  autoUpdate: false,
+  modelCatalogAutoUpdate: false,
   multiWindow: true,
   tvShowOffices: false,
   officeTheme: 'office',

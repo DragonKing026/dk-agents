@@ -90,11 +90,11 @@ export interface HarnessConfig {
    *  while away (battery cost; best on AC). Default off = survive + catch up on
    *  resume. Mirrors the main-process field (src/main/config.ts). */
   strongKeepalive?: boolean;
-  /** Auto-update from GitHub releases (default ON; Settings → General). */
+  /** Periodic update check (default OFF; Settings → General). Manual check is always available. */
   autoUpdate?: boolean;
-  /** Anonymous product analytics (default ON, opt-out; see TELEMETRY.md).
-   *  Mirrors the main-process field (src/main/config.ts). */
-  telemetryEnabled?: boolean;
+  /** Fetch the remote model catalog automatically (TTL 6h) instead of only on the
+   *  Settings "Refresh catalog" button. Default OFF: no request unless asked. */
+  modelCatalogAutoUpdate?: boolean;
   slackEnabled?: boolean;
   slackSigningSecret?: string;
   slackBotToken?: string;
