@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { AgentProvider } from '../shared/agentProvider';
 import type { HireManifest } from '../shared/hire';
+import type { ChatEvent } from '../shared/chatEvents';
+export type { ChatEvent, PermissionDecision } from '../shared/chatEvents';
 export type { HireManifest } from '../shared/hire';
 import type { IntegrationRecord, IntegrationTemplate } from '../shared/integrations';
 export type { IntegrationRecord, IntegrationTemplate } from '../shared/integrations';
@@ -613,6 +615,25 @@ const api = {
     const listener = () => cb();
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
+  },
+
+  // ─── Chat (claude -p stream-json sessions, Claude Code agents only) ─────────
+  chat: {
+    /** Starts the agent's chat session (or returns the live one: `existing: true`). `model` -> `--model`. */
+    start: (agentId: string, opts?: { model?: string }): Promise<{ ok: boolean; error?: string; existing?: boolean }> =>
+      ipcRenderer.invoke('chat:start', agentId, opts),
+    send: (agentId: string, text: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('chat:send', agentId, text),
+    /** Answers a `permission_request`: allow runs the tool with the input of the request. */
+    permission: (agentId: string, requestId: string, allow: boolean): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('chat:permission', agentId, requestId, allow),
+    stop: (agentId: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('chat:stop', agentId),
+    /** Every ChatEvent of every session; returns the unsubscribe function. */
+    onEvent: (cb: (agentId: string, ev: ChatEvent) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, agentId: string, ev: ChatEvent) => cb(agentId, ev);
+      ipcRenderer.on('chat:event', listener);
+      return () => ipcRenderer.removeListener('chat:event', listener);
+    }
   },
 
   // ─── Dialog ──────────────────────────────────────────────────────────────
