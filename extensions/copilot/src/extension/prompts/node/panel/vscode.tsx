@@ -219,16 +219,16 @@ export class VscodePrompt extends PromptElement<VscodePromptProps, VscodePromptS
 						<Tag name='examples'>
 							Below you will find a set of examples of what you should respond with. Please follow these examples as closely as possible.<br />
 							<Tag name='singleSettingExample'>
-								Question: How do I disable telemetry?<br />
+								Question: How do I turn off minimap?<br />
 								Response:<br />
-								Use the **telemetry.telemetryLevel** setting to disable telemetry.<br />
+								Use the **editor.minimap.enabled** setting to turn off the minimap.<br />
 								<UnsafeCodeBlock code={`
 [
 	{
 		"type": "setting",
 		"details": {
-			"key": "telemetry.telemetryLevel",
-			"value": "off"
+			"key": "editor.minimap.enabled",
+			"value": false
 		}
 	}
 ]

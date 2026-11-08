@@ -48,7 +48,7 @@ The internal `_chat.flushUserInteractionTelemetry` command waits up to 10 second
 
 ### Opt-in OTel export contract (version 1)
 
-The existing Agent Host OTel pipeline also exports content-free diagnostic metadata spans. This uses the same exporter configuration, queue, flush and SQLite store as host session metadata, **independently of `telemetry.telemetryLevel`**. Product telemetry and the existing logs are unchanged. OTel must be enabled with a supported destination; content capture need not be enabled. With OTel off, neither diagnostic spans nor renderer diagnostic requests are emitted.
+The existing Agent Host OTel pipeline also exports content-free diagnostic metadata spans. This uses the same exporter configuration, queue, flush and SQLite store as host session metadata, **independently of any product telemetry** (this build has none). The existing logs are unchanged. OTel must be enabled with a supported destination; content capture need not be enabled. With OTel off, neither diagnostic spans nor renderer diagnostic requests are emitted.
 
 | Span name | Source | Measurement boundary |
 |---|---|---|

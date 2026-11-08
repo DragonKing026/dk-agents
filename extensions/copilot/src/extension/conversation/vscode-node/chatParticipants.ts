@@ -29,7 +29,6 @@ import { IPromptCategorizerService } from '../../prompt/node/promptCategorizer';
 import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
 import { ChatTitleProvider } from '../../prompt/node/title';
 import { IUserFeedbackService } from './userActions';
-import { getAdditionalWelcomeMessage } from './welcomeMessageProvider';
 
 export class ChatAgentService implements IChatAgentService {
 	declare readonly _serviceBrand: undefined;
@@ -59,7 +58,6 @@ export class ChatAgentService implements IChatAgentService {
 class ChatAgents implements IDisposable {
 	private readonly _disposables = new DisposableStore();
 
-	private additionalWelcomeMessage: vscode.MarkdownString | undefined;
 
 	constructor(
 		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
@@ -84,7 +82,6 @@ class ChatAgents implements IDisposable {
 	}
 
 	register(): void {
-		this.additionalWelcomeMessage = this.instantiationService.invokeFunction(getAdditionalWelcomeMessage);
 		this._disposables.add(this.registerDefaultAgent());
 		this._disposables.add(this.registerEditingAgent());
 		this._disposables.add(this.registerEditingAgentEditor());
@@ -137,7 +134,6 @@ class ChatAgents implements IDisposable {
 	private registerEditingAgent(): IDisposable {
 		const editingAgent = this.createAgent(editingSessionAgentName, Intent.Edit);
 		editingAgent.iconPath = new vscode.ThemeIcon('copilot');
-		editingAgent.additionalWelcomeMessage = this.additionalWelcomeMessage;
 		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
 		return editingAgent;
 	}
@@ -151,7 +147,6 @@ class ChatAgents implements IDisposable {
 	private registerEditsAgent(): IDisposable {
 		const editingAgent = this.createAgent(editsAgentName, Intent.Agent);
 		editingAgent.iconPath = new vscode.ThemeIcon('tools');
-		editingAgent.additionalWelcomeMessage = this.additionalWelcomeMessage;
 		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
 		return editingAgent;
 	}
@@ -183,7 +178,6 @@ Learn more about [GitHub Copilot](https://docs.github.com/copilot/using-github-c
 		markdownString.isTrusted = { enabledCommands: ['inlineChat.start', 'github.copilot.open.walkthrough'] };
 		defaultAgent.helpTextPostfix = markdownString;
 
-		defaultAgent.additionalWelcomeMessage = this.additionalWelcomeMessage;
 		defaultAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
 		defaultAgent.summarizer = this.instantiationService.createInstance(ChatSummarizerProvider);
 
