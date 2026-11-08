@@ -31,7 +31,7 @@ So far this has only been done on Fedora 44.
 Known problems:
 
 - The install fails if the path to the repository contains a space, see
-  [#10](https://github.com/DragonKing026/dk-code/issues/10).
+  [#20](https://github.com/DragonKing026/dk-code/issues/20).
 - Starting it from a terminal inside VS Code can fail because `ELECTRON_RUN_AS_NODE` is inherited. Unset that variable
   first.
 

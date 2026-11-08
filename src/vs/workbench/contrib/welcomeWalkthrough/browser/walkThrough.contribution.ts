@@ -12,7 +12,7 @@ import { EditorWalkThroughAction, EditorWalkThroughInputSerializer } from './edi
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorExtensions, IEditorFactoryRegistry } from '../../../common/editor.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { MenuRegistry, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { registerWorkbenchContribution2 } from '../../../common/contributions.js';
 import { IEditorPaneRegistry, EditorPaneDescriptor } from '../../../browser/editor.js';
 import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -39,11 +39,5 @@ KeybindingsRegistry.registerCommandAndKeybindingRule(WalkThroughPageUp);
 
 KeybindingsRegistry.registerCommandAndKeybindingRule(WalkThroughPageDown);
 
-MenuRegistry.appendMenuItem(MenuId.MenubarHelpMenu, {
-	group: '1_welcome',
-	command: {
-		id: 'workbench.action.showInteractivePlayground',
-		title: localize({ key: 'miPlayground', comment: ['&& denotes a mnemonic'] }, "Editor Playgrou&&nd")
-	},
-	order: 3
-});
+// The playground text and its links are about VS Code, so it has no Help menu entry (the command stays available)
+

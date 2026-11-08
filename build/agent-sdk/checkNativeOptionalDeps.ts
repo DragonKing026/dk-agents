@@ -85,7 +85,7 @@ function main(): void {
 		return;
 	}
 
-	const nodeModulesDir = path.join(import.meta.dirname, '../../../', 'node_modules');
+	const nodeModulesDir = path.join(import.meta.dirname, '../../', 'node_modules');
 	const target = `${platform}-${arch}`;
 	const errors: string[] = [];
 	for (const basePackage of NATIVE_OPTIONAL_DEP_BASE_PACKAGES) {

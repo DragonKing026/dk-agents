@@ -1703,6 +1703,10 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 	}
 
 	async openSearch(searchValue: string, preserveFocus?: boolean): Promise<void> {
+		if (!this.galleryService.isEnabled() && !/^\s*(@(installed|builtin|enabled|disabled)\b.*)?$/.test(searchValue)) {
+			this.notificationService.info(nls.localize('openSearch.noMarketplace', "Searching for and installing extensions is not available in {0}.", this.productService.nameLong));
+			return;
+		}
 		const viewPaneContainer = (await this.viewsService.openViewContainer(VIEWLET_ID, true))?.getViewPaneContainer() as IExtensionsViewPaneContainer | undefined;
 		if (!viewPaneContainer) {
 			this.logService.trace('ExtensionsWorkbenchService#openSearch: extension view pane container was not available');

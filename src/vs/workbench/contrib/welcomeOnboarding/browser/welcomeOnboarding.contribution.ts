@@ -22,7 +22,7 @@ registerAction2(class extends Action2 {
 			id: 'workbench.action.welcomeOnboarding2026',
 			title: localize2('welcomeOnboarding2026', "Welcome Onboarding 2026"),
 			category: Categories.Developer,
-			f1: true,
+			f1: false, // the onboarding starts with a Copilot sign-in, which DK Code does not offer
 		});
 	}
 

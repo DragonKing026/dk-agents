@@ -188,7 +188,7 @@ export class ViewsService extends Disposable implements IViewsService {
 			contextKey = this.contextKeyService.createKey(getEnabledViewContainerContextKey(viewContainer.id), false);
 			this.enabledViewContainersContextKeys.set(viewContainer.id, contextKey);
 		}
-		contextKey.set(!(viewContainer.hideIfEmpty && this.viewDescriptorService.getViewContainerModel(viewContainer).activeViewDescriptors.length === 0));
+		contextKey.set(!viewContainer.hidden && !(viewContainer.hideIfEmpty && this.viewDescriptorService.getViewContainerModel(viewContainer).activeViewDescriptors.length === 0));
 	}
 
 	private async openComposite(compositeId: string, location: ViewContainerLocation, focus?: boolean): Promise<IPaneComposite | undefined> {
@@ -218,6 +218,10 @@ export class ViewsService extends Disposable implements IViewsService {
 	isViewContainerActive(id: string): boolean {
 		const viewContainer = this.viewDescriptorService.getViewContainerById(id);
 		if (!viewContainer) {
+			return false;
+		}
+
+		if (viewContainer.hidden) {
 			return false;
 		}
 

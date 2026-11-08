@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { formatOptions, Option, OptionDescriptions, Subcommand, parseArgs, ErrorReporter } from '../../node/argv.js';
+import { buildHelpMessage, formatOptions, Option, OptionDescriptions, OPTIONS, Subcommand, parseArgs, ErrorReporter } from '../../node/argv.js';
 import { addArg } from '../../node/argvHelper.js';
 
 function o(description: string, type: 'boolean' | 'string' | 'string[]' = 'string'): Option<any> {
@@ -216,6 +216,19 @@ suite('parseArgs', () => {
 			{ testcmd: { testArg: 'foo', testX: true, '_': [] }, '_': [] },
 			[]
 		);
+	});
+
+	test('extension install options are parsed but not documented, listing stays documented', () => {
+		const help = buildHelpMessage('DK Code', 'dk-code', '1.0.0', OPTIONS);
+		for (const option of ['--install-extension', '--uninstall-extension', '--update-extensions', '--pre-release']) {
+			assert.ok(!help.includes(option), `${option} must not be in the help`);
+		}
+		assert.ok(help.includes('--list-extensions'));
+
+		const parsed = parseArgs(['--install-extension', 'a.b', '--uninstall-extension', 'c.d', '--update-extensions'], OPTIONS);
+		assert.deepStrictEqual(parsed['install-extension'], ['a.b']);
+		assert.deepStrictEqual(parsed['uninstall-extension'], ['c.d']);
+		assert.strictEqual(parsed['update-extensions'], true);
 	});
 
 	ensureNoDisposablesAreLeakedInTestSuite();

@@ -7,7 +7,6 @@ import { IAction } from '../../../../base/common/actions.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Event } from '../../../../base/common/event.js';
-import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { mnemonicButtonLabel } from '../../../../base/common/labels.js';
 import { Disposable, DisposableStore, IDisposable, isDisposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -47,8 +46,8 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import { IUserDataProfilesService } from '../../../../platform/userDataProfile/common/userDataProfile.js';
 import { EditorPaneDescriptor, IEditorPaneRegistry } from '../../../browser/editor.js';
 import { Extensions as ConfigurationMigrationExtensions, IConfigurationMigrationRegistry } from '../../../common/configuration.js';
-import { IsSessionsWindowContext, ResourceContextKey, WorkbenchStateContext } from '../../../common/contextkeys.js';
-import { IWorkbenchContribution, IWorkbenchContributionsRegistry, registerWorkbenchContribution2, Extensions as WorkbenchExtensions, WorkbenchPhase } from '../../../common/contributions.js';
+import { WorkbenchStateContext } from '../../../common/contextkeys.js';
+import { IWorkbenchContribution, IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } from '../../../common/contributions.js';
 import { EditorExtensions } from '../../../common/editor.js';
 import { IViewContainersRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -62,7 +61,6 @@ import { CONTEXT_SYNC_ENABLEMENT } from '../../../services/userDataSync/common/u
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { WORKSPACE_TRUST_EXTENSION_SUPPORT } from '../../../services/workspaces/common/workspaceTrust.js';
 import { IPluginInstallService } from '../../chat/common/plugins/pluginInstallService.js';
-import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
 import { CONTEXT_KEYBINDINGS_EDITOR } from '../../preferences/common/preferences.js';
 import { IWebview } from '../../webview/browser/webview.js';
 import { Query } from '../common/extensionQuery.js';
@@ -70,7 +68,6 @@ import { AutoRestartConfigurationKey, AutoUpdateConfigurationKey, CONTEXT_EXTENS
 import { ExtensionsConfigurationSchema, ExtensionsConfigurationSchemaId } from '../common/extensionsFileTemplate.js';
 import { ExtensionsInput } from '../common/extensionsInput.js';
 import { KeymapExtensions } from '../common/extensionsUtils.js';
-import { SearchExtensionsTool, SearchExtensionsToolData } from '../common/searchExtensionsTool.js';
 import { ExtensionEditor } from './extensionEditor.js';
 import { ExtensionEnablementWorkspaceTrustTransitionParticipant } from './extensionEnablementWorkspaceTrustTransitionParticipant.js';
 import { ExtensionRecommendationNotificationService } from './extensionRecommendationNotificationService.js';
@@ -81,7 +78,7 @@ import { ExtensionsCompletionItemsProvider } from './extensionsCompletionItemsPr
 import { ExtensionEnablementContextKeysContribution } from './extensionEnablementContext.js';
 import { ExtensionDependencyChecker } from './extensionsDependencyChecker.js';
 import { clearSearchResultsIcon, configureRecommendedIcon, extensionsViewIcon, filterIcon, installWorkspaceRecommendedIcon, refreshIcon } from './extensionsIcons.js';
-import { InstallExtensionQuickAccessProvider, ManageExtensionsQuickAccessProvider } from './extensionsQuickAccess.js';
+import { ManageExtensionsQuickAccessProvider } from './extensionsQuickAccess.js';
 import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, ExtensionsSearchValueContext, ExtensionsSortByContext, ExtensionsViewletViewsContribution, ExtensionsViewPaneContainer, MaliciousExtensionChecker, RecommendedExtensionsContext, SearchHasTextContext, SearchMarketplaceExtensionsContext, StatusUpdater } from './extensionsViewlet.js';
 import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
 import './media/extensionManagement.css';
@@ -115,14 +112,9 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
 	{
 		id: VIEWLET_ID,
 		title: localize2('extensions', "Extensions"),
-		openCommandActionDescriptor: {
-			id: VIEWLET_ID,
-			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
-			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX },
-			order: 4,
-		},
 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
 		icon: extensionsViewIcon,
+		hidden: true, // without a Marketplace there is nothing to browse; built-in extensions are managed from settings and the command palette
 		order: 4,
 		rejectAddedViews: true,
 		alwaysUseContainerInfo: true,
@@ -143,7 +135,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 					localize('extensions.autoUpdate.off', 'Extensions are not automatically updated.'),
 				],
 				description: localize('extensions.autoUpdate', "Controls the automatic update behavior of extensions. The updates are fetched from a Microsoft online service."),
-				default: 'on',
+				default: 'off', // there is no Marketplace to fetch updates from
 				scope: ConfigurationScope.APPLICATION,
 				tags: ['usesOnlineServices'],
 				policy: {
@@ -189,14 +181,14 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			'extensions.autoCheckUpdates': {
 				type: 'boolean',
 				description: localize('extensionsCheckUpdates', "When enabled, automatically checks extensions for updates. If an extension has an update, it is marked as outdated in the Extensions view. The updates are fetched from a Microsoft online service."),
-				default: true,
+				default: false, // there is no Marketplace to check
 				scope: ConfigurationScope.APPLICATION,
 				tags: ['usesOnlineServices']
 			},
 			'extensions.ignoreRecommendations': {
 				type: 'boolean',
 				description: localize('extensionsIgnoreRecommendations', "When enabled, the notifications for extension recommendations will not be shown."),
-				default: false,
+				default: true,
 				agentsWindow: { default: true, readOnly: true },
 			},
 			'extensions.showRecommendationsOnlyOnDemand': {
@@ -647,7 +639,6 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			});
 		this.registerGlobalActions();
 		this.registerContextMenuActions();
-		this.registerQuickAccessProvider();
 	}
 
 	private async updateExtensionGalleryStatusContexts(): Promise<void> {
@@ -663,40 +654,8 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		CONTEXT_GALLERY_HAS_EXTENSION_LINK.bindTo(this.contextKeyService).set(!!(extensionGalleryManifest && getExtensionGalleryManifestResourceUri(extensionGalleryManifest, ExtensionGalleryResourceType.ExtensionDetailsViewUri)));
 	}
 
-	private registerQuickAccessProvider(): void {
-		if (this.extensionManagementServerService.localExtensionManagementServer
-			|| this.extensionManagementServerService.remoteExtensionManagementServer
-			|| this.extensionManagementServerService.webExtensionManagementServer
-		) {
-			Registry.as<IQuickAccessRegistry>(Extensions.Quickaccess).registerQuickAccessProvider({
-				ctor: InstallExtensionQuickAccessProvider,
-				prefix: InstallExtensionQuickAccessProvider.PREFIX,
-				placeholder: localize('installExtensionQuickAccessPlaceholder', "Type the name of an extension to install or search."),
-				helpEntries: [{ description: localize('installExtensionQuickAccessHelp', "Install or Search Extensions") }]
-			});
-		}
-	}
-
 	// Global actions
 	private registerGlobalActions(): void {
-		this._register(MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
-			command: {
-				id: VIEWLET_ID,
-				title: localize({ key: 'miPreferencesExtensions', comment: ['&& denotes a mnemonic'] }, "&&Extensions")
-			},
-			group: '2_configuration',
-			order: 3,
-			when: IsSessionsWindowContext.negate()
-		}));
-		this._register(MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
-			command: {
-				id: VIEWLET_ID,
-				title: localize('showExtensions', "Extensions")
-			},
-			group: '2_configuration',
-			order: 3
-		}));
-
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.focusExtensionsView',
 			title: localize2('focusExtensions', 'Focus on Extensions View'),
@@ -917,10 +876,10 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
-				when: ContextKeyExpr.or(CONTEXT_HAS_LOCAL_SERVER, CONTEXT_HAS_REMOTE_SERVER)
+				when: ContextKeyExpr.false() // installing extensions is not offered
 			}, {
 				id: MenuId.ViewContainerTitle,
-				when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainer', VIEWLET_ID), ContextKeyExpr.or(CONTEXT_HAS_LOCAL_SERVER, CONTEXT_HAS_REMOTE_SERVER)),
+				when: ContextKeyExpr.false(),
 				group: '3_install',
 				order: 1
 			}],
@@ -946,7 +905,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			menu: [{
 				id: MenuId.ExplorerContext,
 				group: 'extensions',
-				when: ContextKeyExpr.and(ResourceContextKey.Extension.isEqualTo('.vsix'), ContextKeyExpr.or(CONTEXT_HAS_LOCAL_SERVER, CONTEXT_HAS_REMOTE_SERVER)),
+				when: ContextKeyExpr.false(), // installing extensions is not offered
 			}],
 			run: async (accessor: ServicesAccessor, resources: URI[] | URI) => {
 				const extensionsWorkbenchService = accessor.get(IExtensionsWorkbenchService);
@@ -1005,7 +964,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			category: Categories.Developer,
 			menu: [{
 				id: MenuId.CommandPalette,
-				when: ContextKeyExpr.or(CONTEXT_HAS_WEB_SERVER, CONTEXT_HAS_LOCAL_SERVER)
+				when: ContextKeyExpr.false() // installing extensions is not offered
 			}],
 			run: async (accessor: ServicesAccessor) => {
 				const extensionManagementService = accessor.get(IWorkbenchExtensionManagementService);
@@ -1364,7 +1323,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			icon: configureRecommendedIcon,
 			menu: [{
 				id: MenuId.CommandPalette,
-				when: WorkbenchStateContext.notEqualsTo('empty'),
+				when: ContextKeyExpr.false(), // recommendations are not offered
 			}, {
 				id: MenuId.ViewTitle,
 				when: ContextKeyExpr.equals('view', WORKSPACE_RECOMMENDATIONS_VIEW_ID),
@@ -2090,21 +2049,6 @@ class TrustedPublishersInitializer implements IWorkbenchContribution {
 	}
 }
 
-class ExtensionToolsContribution extends Disposable implements IWorkbenchContribution {
-
-	static readonly ID = 'extensions.chat.toolsContribution';
-
-	constructor(
-		@ILanguageModelToolsService toolsService: ILanguageModelToolsService,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
-		super();
-		const searchExtensionsTool = instantiationService.createInstance(SearchExtensionsTool);
-		this._register(toolsService.registerTool(SearchExtensionsToolData, searchExtensionsTool));
-		this._register(toolsService.vscodeToolSet.addTool(SearchExtensionsToolData));
-	}
-}
-
 const workbenchRegistry = Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench);
 workbenchRegistry.registerWorkbenchContribution(ExtensionsContributions, LifecyclePhase.Restored);
 workbenchRegistry.registerWorkbenchContribution(StatusUpdater, LifecyclePhase.Eventually);
@@ -2122,8 +2066,6 @@ workbenchRegistry.registerWorkbenchContribution(ExtensionMarketplaceStatusUpdate
 if (isWeb) {
 	workbenchRegistry.registerWorkbenchContribution(ExtensionStorageCleaner, LifecyclePhase.Eventually);
 }
-
-registerWorkbenchContribution2(ExtensionToolsContribution.ID, ExtensionToolsContribution, WorkbenchPhase.AfterRestored);
 
 registerAction2(class ExtensionsGallerySignInAction extends Action2 {
 	constructor() {
