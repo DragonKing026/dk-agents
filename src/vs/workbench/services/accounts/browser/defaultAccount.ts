@@ -53,10 +53,10 @@ interface IDefaultAccountConfig {
 		readonly enterpriseProviderConfig: string;
 		readonly scopes: string[][];
 	};
-	readonly tokenEntitlementUrl: string;
-	readonly entitlementUrl: string;
-	readonly mcpRegistryDataUrl: string;
-	readonly managedSettingsUrl: string;
+	readonly tokenEntitlementUrl?: string;
+	readonly entitlementUrl?: string;
+	readonly mcpRegistryDataUrl?: string;
+	readonly managedSettingsUrl?: string;
 }
 
 export const DEFAULT_ACCOUNT_SIGN_IN_COMMAND = 'workbench.actions.accounts.signIn';
@@ -1575,7 +1575,10 @@ export class DefaultAccountProvider extends Disposable implements IDefaultAccoun
 		return this.getAccountUrl('/copilot_internal/managed_settings', this.defaultAccountConfig.managedSettingsUrl, sessionContext);
 	}
 
-	private getAccountUrl(path: string, defaultUrl: string, sessionContext: IAccountSessionContext): string | undefined {
+	private getAccountUrl(path: string, defaultUrl: string | undefined, sessionContext: IAccountSessionContext): string | undefined {
+		if (!defaultUrl) {
+			return undefined; // no endpoint configured in product.json: this build never queries account entitlements
+		}
 		if (!sessionContext.authenticationProvider.enterprise) {
 			return defaultUrl;
 		}

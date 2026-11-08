@@ -1706,7 +1706,6 @@ export default defineConfig(
 						'stream',
 						'string_decoder',
 						'tar',
-						'tas-client',
 						'tls',
 						'undici',
 						'undici-types',
@@ -1807,7 +1806,6 @@ export default defineConfig(
 						'vs/base/~',
 						'vs/base/parts/*/~',
 						'vs/platform/*/~',
-						'tas-client', // node module allowed even in /common/
 						'@xterm/headless', // node module allowed even in /common/
 						'@vscode/fs-copyfile', // used by agentHost for file copying after worktree creation
 						'@vscode/tree-sitter-wasm', // used by agentHost for command auto-approval
@@ -1827,7 +1825,6 @@ export default defineConfig(
 						'vs/base/~',
 						'vs/base/parts/*/~',
 						'vs/platform/*/~',
-						'tas-client', // node module allowed even in /common/
 						'@xterm/headless', // node module allowed even in /common/
 						'@vscode/tree-sitter-wasm' // used by agentHost for command auto-approval
 					]
@@ -1945,7 +1942,6 @@ export default defineConfig(
 							'when': 'test',
 							'pattern': 'vs/workbench/contrib/*/~'
 						}, // TODO@layers
-						'tas-client', // node module allowed even in /common/
 						'vscode-textmate', // node module allowed even in /common/
 						'@vscode/vscode-languagedetection', // node module allowed even in /common/
 						'@vscode/tree-sitter-wasm', // type import
@@ -2370,7 +2366,6 @@ export default defineConfig(
 							'when': 'test',
 							'pattern': 'vs/workbench/contrib/*/~'
 						}, // TODO@layers
-						'tas-client', // node module allowed even in /common/
 						'vscode-textmate', // node module allowed even in /common/
 						'@vscode/vscode-languagedetection', // node module allowed even in /common/
 						'@vscode/tree-sitter-wasm', // type import
@@ -2698,7 +2693,6 @@ export default defineConfig(
 				'isbinaryfile',
 				'minimatch',
 				'source-map-support',
-				'vscode-tas-client',
 				'web-tree-sitter'
 			],
 			'import/no-restricted-paths': [

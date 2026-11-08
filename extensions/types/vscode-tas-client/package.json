@@ -1,0 +1,9 @@
+{
+  "name": "vscode-tas-client",
+  "version": "0.0.0-local",
+  "description": "Local replacement for vscode-tas-client that never contacts an experimentation service",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "types": "./index.d.ts"
+}

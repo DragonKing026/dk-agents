@@ -61,7 +61,7 @@ describe('BYOKContrib', () => {
 		const fetcherService = { fetch: () => Promise.reject(new Error('offline')) } as unknown as IFetcherService;
 		const logError = vi.fn();
 		const logService = { info: () => { }, warn: () => { }, error: logError } as unknown as ILogService;
-		const configurationService = { getNonExtensionConfig: () => undefined } as unknown as IConfigurationService;
+		const configurationService = { getNonExtensionConfig: () => undefined, getConfig: () => false } as unknown as IConfigurationService;
 		const contrib = new BYOKContrib(fetcherService, logService, {} as IVSCodeExtensionContext, authService as unknown as IAuthenticationService, instantiationService, configurationService);
 
 		const states = [{ languageModelProviders: registeredProviders.size, voiceLiveProviders: registeredVoiceProviders.size }];
@@ -89,5 +89,23 @@ describe('BYOKContrib', () => {
 			],
 			errors: speechEnabled ? [] : [[registrationError, 'BYOK: failed to register GPT-Live voice provider.']],
 		});
+	});
+	test.each([false, true])('requests the known models list only when opted in (fetchKnownModels: %s)', async fetchKnownModels => {
+		const authService = {
+			anyGitHubSession: undefined,
+			copilotToken: undefined as Omit<CopilotToken, 'token'> | undefined,
+			onDidAuthenticationChange: new Emitter<void>().event,
+			onDidCopilotTokenChange: new Emitter<void>().event,
+		};
+		const instantiationService = { createInstance: () => ({ updateKnownModels: () => { } }) } as unknown as IInstantiationService;
+		const fetch = vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ version: 1, modelInfo: {} }) }));
+		const fetcherService = { fetch } as unknown as IFetcherService;
+		const logService = { info: () => { }, warn: () => { }, error: () => { } } as unknown as ILogService;
+		const configurationService = { getNonExtensionConfig: () => undefined, getConfig: () => fetchKnownModels } as unknown as IConfigurationService;
+		const contrib = new BYOKContrib(fetcherService, logService, {} as IVSCodeExtensionContext, authService as unknown as IAuthenticationService, instantiationService, configurationService);
+		await Promise.resolve();
+
+		expect(fetch).toHaveBeenCalledTimes(fetchKnownModels ? 1 : 0);
+		contrib.dispose();
 	});
 });

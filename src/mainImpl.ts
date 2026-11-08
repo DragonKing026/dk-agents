@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { configurePortable } from './bootstrap-node.js';
 import { bootstrapESM } from './bootstrap-esm.js';
-import { app, protocol, crashReporter, Menu, contentTracing } from 'electron';
+import { app, protocol, crashReporter, Menu, contentTracing, session } from 'electron';
 import minimist from 'minimist';
 import { product } from './bootstrap-meta.js';
 import { parse } from './vs/base/common/jsonc.js';
@@ -173,10 +173,22 @@ if (process.platform === 'win32' || process.platform === 'linux') {
 	app.commandLine.appendSwitch('lang', electronLocale);
 }
 
+// Spell checking is not used. On Linux and Windows Chromium downloads a Hunspell
+// dictionary from a Google CDN when a session starts with spell checking enabled,
+// so turn it off for every session (including the integrated browser's) and point
+// the downloader at a location that is never fetched over the network.
+function disableSpellChecker(electronSession: Electron.Session): void {
+	electronSession.setSpellCheckerEnabled(false);
+	electronSession.setSpellCheckerLanguages([]);
+	electronSession.setSpellCheckerDictionaryDownloadURL('file:///dev/null/');
+}
+app.on('session-created', disableSpellChecker);
+
 // Load our code once ready
 perf.mark('code/willWaitForAppReady');
 app.once('ready', function () {
 	perf.mark('code/didWaitForAppReady');
+	disableSpellChecker(session.defaultSession);
 	if (args.trace) {
 		let traceOptions: Electron.TraceConfig | Electron.TraceCategoriesAndOptions;
 		if (args['trace-memory-infra']) {
