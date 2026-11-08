@@ -1,0 +1,53 @@
+---
+# yamllint disable rule:line-length
+# Teksty formularza widoczne dla użytkownika: bez sztucznego łamania wierszy.
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For security problems, do not use this form, see SECURITY.md.
+        Do not paste API keys, tokens or personal data; mask them first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: e.g. commit abc1234 built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Linux distribution and desktop
+      placeholder: e.g. Fedora 44, KDE Plasma (Wayland)
+    validations:
+      required: true
+  - type: input
+    id: agents
+    attributes:
+      label: Agent CLIs or models involved (name and version)
+      placeholder: e.g. Claude Code 2.1.319, Ollama with gpt-oss:20b
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Relevant output only, with secrets and personal data removed.
+      render: text
