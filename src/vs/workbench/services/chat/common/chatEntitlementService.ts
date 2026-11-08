@@ -455,15 +455,11 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 			return;
 		}
 
-		if (!productService.defaultChatAgent) {
-			return; // we need a default chat agent configured going forward from here
-		}
-
-		const context = this.context = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementContext)));
-		this.requests = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementRequests, context.value, {
-			clearQuotas: () => this.clearQuotas(),
-			acceptQuotas: quotas => this.acceptQuotas(quotas)
-		})));
+		// DK Code has no Copilot account: there is no sign-in or setup flow and no entitlement,
+		// quota or token requests to GitHub. `context` and `requests` stay undefined, which
+		// disables the setup contributions, and chat counts as set up so that views do not
+		// wait for a sign-in that never happens.
+		ChatEntitlementContextKeys.Setup.completed.bindTo(this.contextKeyService).set(true);
 
 		this.registerListeners();
 	}
