@@ -177,6 +177,8 @@ const TEST_PRODUCT_SERVICE: IProductService = {
 	_serviceBrand: undefined,
 	...product,
 	version: '1.2.3',
+	// product.json caps the collectable telemetry at none, lift the ceiling to test telemetry handling
+	enabledTelemetryLevels: { error: true, usage: true },
 };
 
 function defaultChatUri(session: URI): URI {

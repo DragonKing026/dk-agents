@@ -166,8 +166,6 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	// Missing from VS Code policy forwarding. Runtime-native telemetry policy does not establish
 	// enforcement for the host's own telemetry pipeline; that coverage remains unverified here.
 	CopilotOtelHeaders: { status: 'partial' },
-	// Mirrored into the root config of every host.
-	TelemetryLevel: { status: 'enforced' },
 
 	// #endregion
 

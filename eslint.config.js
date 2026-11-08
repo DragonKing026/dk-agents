@@ -2694,7 +2694,6 @@ export default defineConfig(
 				// node: dependencies
 				'@humanwhocodes/gitignore-to-minimatch',
 				'@vscode/extension-telemetry',
-				'applicationinsights',
 				'ignore',
 				'isbinaryfile',
 				'minimatch',
@@ -3002,7 +3001,6 @@ export default defineConfig(
 			'extensions/copilot/src/platform/tasks/vscode/tasksService.ts',
 			'extensions/copilot/src/platform/telemetry/common/failingTelemetryReporter.ts',
 			'extensions/copilot/src/platform/telemetry/common/telemetryData.ts',
-			'extensions/copilot/src/platform/telemetry/node/azureInsightsReporter.ts',
 			'extensions/copilot/src/platform/telemetry/node/spyingTelemetryService.ts',
 			'extensions/copilot/src/platform/terminal/common/terminalService.ts',
 			'extensions/copilot/src/platform/terminal/vscode/terminalServiceImpl.ts',

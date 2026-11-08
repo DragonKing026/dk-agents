@@ -169,7 +169,6 @@ extensions/copilot/src/platform/otel/common/otelConfig.ts
 extensions/copilot/src/platform/otel/common/test/agentOTelEnv.spec.ts
 extensions/copilot/src/platform/otel/common/test/genAiEvents.spec.ts
 extensions/copilot/src/platform/telemetry/common/telemetryData.ts
-extensions/copilot/src/platform/telemetry/node/azureInsightsReporter.ts
 extensions/copilot/src/platform/telemetry/test/node/telemetry2.spec.ts
 extensions/copilot/src/platform/telemetry/vscode-node/microsoftExperimentationService.ts
 extensions/copilot/src/shared-fetch-utils/common/middleware/authBlockedMiddleware.ts
