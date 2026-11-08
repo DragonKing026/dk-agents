@@ -8,7 +8,7 @@ import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { autorun, IObservable, observableValue } from '../../../../../base/common/observable.js';
 import { localize } from '../../../../../nls.js';
-import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { logSettingExperimentTrigger } from '../../../../../platform/telemetry/common/experimentTrigger.js';
@@ -39,12 +39,9 @@ export interface IAgentsBannerResult {
 }
 
 /** Returns whether the desktop Agents window is available and agent mode and AI features are enabled. */
-export function canShowAgentsBanner(chatEntitlementService: IChatEntitlementService, configurationService: IConfigurationService): boolean {
-	const sentiment = chatEntitlementService.sentiment;
-	if (sentiment.hidden || sentiment.disabled || configurationService.getValue<boolean>(ChatConfiguration.AgentEnabled) === false) {
-		return false;
-	}
-	return !!CommandsRegistry.getCommand(OPEN_WORKSPACE_IN_AGENTS_WINDOW_COMMAND_ID);
+export function canShowAgentsBanner(_chatEntitlementService: IChatEntitlementService, _configurationService: IConfigurationService): boolean {
+	// DK Code: the banner offers GitHub sign-in or the upstream Agents window, and neither belongs on the welcome page.
+	return false;
 }
 
 export interface IAgentsBannerOptions {
