@@ -113,7 +113,7 @@ import { ISnippyService, NullSnippyService } from '../../platform/snippy/common/
 import { IExperimentationService, TreatmentsChangeEvent } from '../../platform/telemetry/common/nullExperimentationService';
 import { ITelemetryService, TelemetryDestination, TelemetryEventMeasurements, TelemetryEventProperties } from '../../platform/telemetry/common/telemetry';
 import { eventPropertiesToSimpleObject } from '../../platform/telemetry/common/telemetryData';
-import { unwrapEventNameFromPrefix } from '../../platform/telemetry/node/azureInsightsReporter';
+import { unwrapEventNameFromPrefix } from '../../platform/telemetry/common/eventNameWrapping';
 import { ITerminalService, NullTerminalService } from '../../platform/terminal/common/terminalService';
 import { ITokenizerProvider, TokenizerProvider } from '../../platform/tokenizer/node/tokenizer';
 import { IWorkspaceService, NullWorkspaceService } from '../../platform/workspace/common/workspaceService';

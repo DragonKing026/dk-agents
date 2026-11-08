@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ITelemetryService, TelemetryEventMeasurements, TelemetryEventProperties } from '../../../../../platform/telemetry/common/telemetry';
-import { wrapEventNameForPrefixRemoval } from '../../../../../platform/telemetry/node/azureInsightsReporter';
+import { wrapEventNameForPrefixRemoval } from '../../../../../platform/telemetry/common/eventNameWrapping';
 import { createServiceIdentifier } from '../../../../../util/common/services';
 import { TelemetryMeasurements, TelemetryProperties, TelemetryStore } from '../../lib/src/telemetry';
 import type { TelemetrySpy } from '../../lib/src/test/telemetrySpy';

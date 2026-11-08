@@ -34,7 +34,7 @@ import { IgnoredFileProviderContribution } from '../../ignore/vscode-node/ignore
 import { InlineEditProviderFeatureContribution } from '../../inlineEdits/vscode-node/inlineEditProviderFeature';
 import { FixTestFailureContribution } from '../../intents/vscode-node/fixTestFailureContributions';
 import { ExtensionStateCommandContribution } from '../../log/vscode-node/extensionStateCommand';
-import { FetcherTelemetryContribution, LoggingActionsContrib } from '../../log/vscode-node/loggingActions';
+import { LoggingActionsContrib } from '../../log/vscode-node/loggingActions';
 import { RequestLogTree } from '../../log/vscode-node/requestLogTree';
 import { McpSetupCommands } from '../../mcp/vscode-node/commands';
 import { NotebookFollowCommands } from '../../notebook/vscode-node/followActions';
@@ -72,7 +72,6 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(AuthenticationContrib),
 	chatBlockLanguageContribution,
 	asContributionFactory(LoggingActionsContrib),
-	asContributionFactory(FetcherTelemetryContribution),
 	asContributionFactory(PowerStateLogger),
 	asContributionFactory(ContextKeysContribution),
 	asContributionFactory(ByokUtilityModelNotificationContribution),

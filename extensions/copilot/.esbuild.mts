@@ -35,7 +35,6 @@ const baseNodeBuildOptions = {
 		'playwright',
 		'keytar',
 		'@azure/functions-core',
-		'applicationinsights-native-metrics',
 		'@opentelemetry/instrumentation',
 		'@azure/opentelemetry-instrumentation-azure-sdk',
 		'electron', // this is for simulation workbench,
@@ -46,12 +45,6 @@ const baseNodeBuildOptions = {
 	],
 	platform: 'node',
 	mainFields: ['module', 'main'], // needed for jsonc-parser,
-	define: {
-		'process.env.APPLICATIONINSIGHTS_CONFIGURATION_CONTENT': JSON.stringify(JSON.stringify({
-			proxyHttpUrl: '',
-			proxyHttpsUrl: ''
-		}))
-	},
 } satisfies esbuild.BuildOptions;
 
 const webviewBuildOptions = {
