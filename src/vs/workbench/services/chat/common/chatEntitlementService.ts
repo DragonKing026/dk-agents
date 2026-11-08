@@ -461,6 +461,15 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 		// wait for a sign-in that never happens.
 		ChatEntitlementContextKeys.Setup.completed.bindTo(this.contextKeyService).set(true);
 
+		// Without a context, nothing else connects the setting that hides AI features to the UI.
+		const hiddenContextKey = ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService);
+		hiddenContextKey.set(this.configurationService.getValue(ChatAIDisabledSettingId) === true);
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration(ChatAIDisabledSettingId)) {
+				hiddenContextKey.set(this.configurationService.getValue(ChatAIDisabledSettingId) === true);
+			}
+		}));
+
 		this.registerListeners();
 	}
 

@@ -2391,7 +2391,7 @@
           },
           "js/ts.tsserver.automaticTypeAcquisition.enabled": {
             "type": "boolean",
-            "default": true,
+            "default": false,
             "markdownDescription": "%configuration.automaticTypeAcquisition.enabled%",
             "scope": "window",
             "keywords": [
@@ -2401,7 +2401,7 @@
           },
           "typescript.disableAutomaticTypeAcquisition": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "markdownDescription": "%typescript.disableAutomaticTypeAcquisition%",
             "markdownDeprecationMessage": "%typescript.disableAutomaticTypeAcquisition.unifiedDeprecationMessage%",
             "scope": "window",
