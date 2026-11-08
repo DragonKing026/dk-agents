@@ -462,11 +462,10 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 		ChatEntitlementContextKeys.Setup.completed.bindTo(this.contextKeyService).set(true);
 
 		// Without a context, nothing else connects the setting that hides AI features to the UI.
-		const hiddenContextKey = ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService);
-		hiddenContextKey.set(this.configurationService.getValue(ChatAIDisabledSettingId) === true);
+		this.updateHiddenContextKey();
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(ChatAIDisabledSettingId)) {
-				hiddenContextKey.set(this.configurationService.getValue(ChatAIDisabledSettingId) === true);
+				this.updateHiddenContextKey();
 			}
 		}));
 
@@ -735,8 +734,16 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 		} else {
 			// No ChatEntitlementContext (e.g. no defaultChatAgent in product.json).
 			// Set the context key directly as a fallback.
-			ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(hidden);
+			this.forceHidden = hidden;
+			this.updateHiddenContextKey();
 		}
+	}
+
+	private forceHidden = false;
+
+	private updateHiddenContextKey(): void {
+		const hidden = this.forceHidden || this.configurationService.getValue(ChatAIDisabledSettingId) === true;
+		ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(hidden);
 	}
 
 	async update(token: CancellationToken): Promise<void> {
