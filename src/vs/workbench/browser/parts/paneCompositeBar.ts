@@ -439,6 +439,10 @@ export class PaneCompositeBar extends Disposable {
 		const viewContainerId = isString(viewContainerOrId) ? viewContainerOrId : viewContainerOrId.id;
 
 		if (viewContainer) {
+			if (viewContainer.hidden) {
+				return true;
+			}
+
 			if (viewContainer.hideIfEmpty) {
 				if (this.viewService.isViewContainerActive(viewContainerId)) {
 					return false;

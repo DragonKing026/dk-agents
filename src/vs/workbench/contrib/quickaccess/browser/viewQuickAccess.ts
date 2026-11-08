@@ -215,6 +215,10 @@ export class ViewQuickAccessProvider extends PickerQuickAccessProvider<IViewQuic
 
 	private includeViewContainer(container: PaneCompositeDescriptor): boolean {
 		const viewContainer = this.viewDescriptorService.getViewContainerById(container.id);
+		if (viewContainer?.hidden) {
+			return false;
+		}
+
 		if (viewContainer?.hideIfEmpty) {
 			return this.viewDescriptorService.getViewContainerModel(viewContainer).activeViewDescriptors.length > 0;
 		}

@@ -33,9 +33,6 @@ import { DeferredPromise } from '../../base/common/async.js';
 function shouldSpawnCliProcess(argv: NativeParsedArgs): boolean {
 	return !!argv['install-source']
 		|| !!argv['list-extensions']
-		|| !!argv['install-extension']
-		|| !!argv['uninstall-extension']
-		|| !!argv['update-extensions']
 		|| !!argv['locate-extension']
 		|| !!argv['add-mcp']
 		|| !!argv['telemetry'];
@@ -48,6 +45,12 @@ export async function main(argv: string[]): Promise<void> {
 		args = parseCLIProcessArgv(argv);
 	} catch (err) {
 		console.error(err.message);
+		return;
+	}
+
+	if (args['install-extension'] || args['uninstall-extension'] || args['update-extensions'] || args['install-builtin-extension']) {
+		console.error(`Installing, updating and uninstalling extensions is not available in ${product.nameLong}. Use '--list-extensions' to list the built-in extensions.`);
+		process.exitCode = 1;
 		return;
 	}
 

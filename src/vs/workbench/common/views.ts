@@ -127,6 +127,12 @@ export interface IViewContainerDescriptor {
 	readonly hideIfEmpty?: boolean;
 
 	/**
+	 * If enabled, the view container never gets an entry in the activity bar and counts as inactive.
+	 * The container stays registered, so code that opens it directly keeps working.
+	 */
+	readonly hidden?: boolean;
+
+	/**
 	 * Id of the extension that contributed the view container
 	 */
 	readonly extensionId?: ExtensionIdentifier;
