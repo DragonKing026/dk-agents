@@ -16,23 +16,23 @@ suite('ServerTelemetryService', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 	const productService: IProductService = { _serviceBrand: undefined, ...product };
 
-	test('exposes and preserves the most restrictive injected telemetry level', async () => {
+	test('stays at NONE whatever telemetry level is injected', async () => {
 		const service = disposables.add(new ServerTelemetryService(
 			{ appenders: [NullAppender] },
-			TelemetryLevel.ERROR,
+			TelemetryLevel.USAGE,
 			new TestConfigurationService(),
 			productService,
 		));
 
 		const initialLevel = service.telemetryLevel;
-		await service.updateInjectedTelemetryLevel(TelemetryLevel.NONE);
+		await service.updateInjectedTelemetryLevel(TelemetryLevel.ERROR);
 		await service.updateInjectedTelemetryLevel(TelemetryLevel.USAGE);
 
 		assert.deepStrictEqual({
 			initialLevel,
 			finalLevel: service.telemetryLevel,
 		}, {
-			initialLevel: TelemetryLevel.ERROR,
+			initialLevel: TelemetryLevel.NONE,
 			finalLevel: TelemetryLevel.NONE,
 		});
 	});

@@ -161,8 +161,6 @@ export async function createAgentHostRuntime(options: ICreateAgentHostRuntimeOpt
 			logService,
 			disposables: infrastructure,
 			disableTelemetry: options.disableTelemetry,
-			fetchFn,
-			requestService: foundation.requestService,
 		});
 		startup.mark('telemetry', { since: 'configuration' });
 		services.set(ITelemetryService, telemetryService);

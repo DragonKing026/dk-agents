@@ -169,7 +169,6 @@ extensions/copilot/src/platform/otel/common/otelConfig.ts
 extensions/copilot/src/platform/otel/common/test/agentOTelEnv.spec.ts
 extensions/copilot/src/platform/otel/common/test/genAiEvents.spec.ts
 extensions/copilot/src/platform/telemetry/common/telemetryData.ts
-extensions/copilot/src/platform/telemetry/node/azureInsightsReporter.ts
 extensions/copilot/src/platform/telemetry/test/node/telemetry2.spec.ts
 extensions/copilot/src/platform/telemetry/vscode-node/microsoftExperimentationService.ts
 extensions/copilot/src/shared-fetch-utils/common/middleware/authBlockedMiddleware.ts
@@ -450,10 +449,8 @@ src/vs/workbench/services/keybinding/common/keybindingEditing.ts
 # Telemetry, OTel, and performance (14 files)
 src/vs/platform/otel/test/node/otlp/otlpJsonDecode.test.ts
 src/vs/platform/otel/test/node/otlp/outboundForwarder.test.ts
-src/vs/platform/telemetry/common/1dsAppender.ts
 src/vs/platform/telemetry/common/commonProperties.ts
 src/vs/platform/telemetry/common/telemetryService.ts
-src/vs/platform/telemetry/test/browser/1dsAppender.test.ts
 src/vs/platform/telemetry/test/browser/telemetryService.test.ts
 src/vs/workbench/contrib/performance/browser/performance.contribution.ts
 src/vs/workbench/contrib/performance/test/browser/perfviewEditor.test.ts

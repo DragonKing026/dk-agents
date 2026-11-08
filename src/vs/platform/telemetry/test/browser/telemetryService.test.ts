@@ -14,7 +14,8 @@ import product from '../../../product/common/product.js';
 import { IProductService } from '../../../product/common/productService.js';
 import ErrorTelemetry from '../../browser/errorTelemetry.js';
 import { TelemetryConfiguration, TelemetryLevel } from '../../common/telemetry.js';
-import { ITelemetryServiceConfig, TelemetryService } from '../../common/telemetryService.js';
+import { IConfigurationService } from '../../../configuration/common/configuration.js';
+import { ITelemetryServiceConfig, TelemetryService as BaseTelemetryService } from '../../common/telemetryService.js';
 import { ITelemetryAppender, NullAppender } from '../../common/telemetryUtils.js';
 
 const sinonTestFn = sinonTest(sinon);
@@ -109,9 +110,20 @@ class ErrorTestingSettings {
 	}
 }
 
+/**
+ * getTelemetryLevel() is always NONE in this product, so the tests that need a working service
+ * use a fixed USAGE level instead of reading it from the configuration.
+ */
+class TelemetryService extends BaseTelemetryService {
+	constructor(config: ITelemetryServiceConfig, _configurationService: IConfigurationService, productService: IProductService) {
+		super({ ...config, telemetryLevel: TelemetryLevel.USAGE }, undefined, productService);
+	}
+}
+
 suite('TelemetryService', () => {
 
-	const TestProductService: IProductService = { _serviceBrand: undefined, ...product };
+	// product.json caps the collectable telemetry at none, lift the ceiling to test the service itself
+	const TestProductService: IProductService = { _serviceBrand: undefined, ...product, enabledTelemetryLevels: { error: true, usage: true } };
 
 	// Tests replace the global error handler, restore it so that later tests still report uncaught errors
 	let originalOnError: OnErrorEventHandler;
@@ -938,13 +950,12 @@ suite('TelemetryService', () => {
 		service.dispose();
 	}));
 
-	test('Telemetry Service checks with config service', function () {
-
-		let telemetryLevel: string = TelemetryConfiguration.OFF;
+	test('Telemetry level is NONE whatever the configuration says', function () {
+		let telemetryLevel: string = TelemetryConfiguration.ON;
 		const emitter = new Emitter<any>();
 
 		const testAppender = new TestTelemetryAppender();
-		const service = new TelemetryService({
+		const service = new BaseTelemetryService({
 			appenders: [testAppender],
 			sendErrorTelemetry: true,
 		}, new class extends TestConfigurationService {
@@ -956,18 +967,27 @@ suite('TelemetryService', () => {
 
 		assert.strictEqual(service.telemetryLevel, TelemetryLevel.NONE);
 
-		telemetryLevel = TelemetryConfiguration.ON;
-		emitter.fire({ affectsConfiguration: () => true });
-		assert.strictEqual(service.telemetryLevel, TelemetryLevel.USAGE);
-
 		telemetryLevel = TelemetryConfiguration.ERROR;
 		emitter.fire({ affectsConfiguration: () => true });
-		assert.strictEqual(service.telemetryLevel, TelemetryLevel.ERROR);
+		service.publicLog('event');
+		service.publicLogError('errorEvent');
+		assert.deepStrictEqual({
+			telemetryLevel: service.telemetryLevel,
+			eventCount: testAppender.getEventsCount(),
+		}, {
+			telemetryLevel: TelemetryLevel.NONE,
+			eventCount: 0,
+		});
 
-		telemetryLevel = 'invalid';
-		emitter.fire({ affectsConfiguration: () => true });
-		service.publicLog('invalidTelemetryLevel');
-		service.publicLogError('invalidTelemetryLevelError');
+		service.dispose();
+	});
+
+	test('A product.json ceiling of none keeps the level at NONE even for a fixed level', function () {
+		const testAppender = new TestTelemetryAppender();
+		const service = BaseTelemetryService.createWithLevel({ appenders: [testAppender], sendErrorTelemetry: true, telemetryLevel: TelemetryLevel.USAGE }, { _serviceBrand: undefined, ...product, enabledTelemetryLevels: { error: false, usage: false } });
+
+		service.publicLog('event');
+		service.publicLogError('errorEvent');
 		assert.deepStrictEqual({
 			telemetryLevel: service.telemetryLevel,
 			eventCount: testAppender.getEventsCount(),

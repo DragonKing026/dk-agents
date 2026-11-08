@@ -1,0 +1,9 @@
+{
+  "name": "@vscode/extension-telemetry",
+  "version": "0.0.0-local",
+  "description": "Local replacement for @vscode/extension-telemetry that never collects or sends anything",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "types": "./index.d.ts"
+}

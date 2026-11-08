@@ -5,7 +5,6 @@
 
 import { setDefaultResultOrder } from 'dns';
 import * as fs from 'fs';
-import { hostname, release } from 'os';
 import { raceTimeout } from '../../base/common/async.js';
 import { toErrorMessage } from '../../base/common/errorMessage.js';
 import { isSigPipeError, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
@@ -48,17 +47,13 @@ import { IProductService } from '../../platform/product/common/productService.js
 import { IRequestService } from '../../platform/request/common/request.js';
 import { RequestService } from '../../platform/request/node/requestService.js';
 import { SaveStrategy, StateReadonlyService } from '../../platform/state/node/stateService.js';
-import { resolveCommonProperties } from '../../platform/telemetry/common/commonProperties.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
-import { ITelemetryServiceConfig, TelemetryService } from '../../platform/telemetry/common/telemetryService.js';
-import { supportsTelemetry, NullTelemetryService, getPiiPathsFromEnvironment, getUserContentPathsFromEnvironment, isInternalTelemetry, ITelemetryAppender } from '../../platform/telemetry/common/telemetryUtils.js';
-import { OneDataSystemAppender } from '../../platform/telemetry/node/1dsAppender.js';
+import { NullTelemetryService, ITelemetryAppender } from '../../platform/telemetry/common/telemetryUtils.js';
 import { buildTelemetryMessage } from '../../platform/telemetry/node/telemetry.js';
 import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../platform/uriIdentity/common/uriIdentityService.js';
 import { IUserDataProfile, IUserDataProfilesService } from '../../platform/userDataProfile/common/userDataProfile.js';
 import { UserDataProfilesReadonlyService } from '../../platform/userDataProfile/node/userDataProfile.js';
-import { resolveMachineId, resolveSqmId, resolveDevDeviceId } from '../../platform/telemetry/node/telemetryUtils.js';
 import { ExtensionsProfileScannerService } from '../../platform/extensionManagement/node/extensionsProfileScannerService.js';
 import { LogService } from '../../platform/log/common/logService.js';
 import { LoggerService } from '../../platform/log/node/loggerService.js';
@@ -202,18 +197,6 @@ class CliMain extends Disposable {
 			configurationService.initialize()
 		]);
 
-		// Get machine ID
-		let machineId: string | undefined = undefined;
-		try {
-			machineId = await resolveMachineId(stateService, logService);
-		} catch (error) {
-			if (error.code !== 'ENOENT') {
-				logService.error(error);
-			}
-		}
-		const sqmId = await resolveSqmId(stateService, logService);
-		const devDeviceId = await resolveDevDeviceId(stateService, logService);
-
 		// Initialize user data profiles after initializing the state
 		userDataProfilesService.init();
 
@@ -248,25 +231,7 @@ class CliMain extends Disposable {
 
 		// Telemetry
 		const appenders: ITelemetryAppender[] = [];
-		const isInternal = isInternalTelemetry(productService, configurationService);
-		if (supportsTelemetry(productService, environmentService)) {
-			if (productService.aiConfig?.ariaKey) {
-				appenders.push(new OneDataSystemAppender(requestService, isInternal, 'monacoworkbench', null, productService.aiConfig.ariaKey));
-			}
-
-			const config: ITelemetryServiceConfig = {
-				appenders,
-				sendErrorTelemetry: false,
-				commonProperties: resolveCommonProperties(release(), hostname(), process.arch, productService.commit, productService.version, machineId, sqmId, devDeviceId, isInternal, productService.date),
-				piiPaths: getPiiPathsFromEnvironment(environmentService),
-				userContentPaths: getUserContentPathsFromEnvironment(environmentService)
-			};
-
-			services.set(ITelemetryService, new SyncDescriptor(TelemetryService, [config], false));
-
-		} else {
-			services.set(ITelemetryService, NullTelemetryService);
-		}
+		services.set(ITelemetryService, NullTelemetryService);
 
 		return [new InstantiationService(services), appenders];
 	}
