@@ -455,15 +455,19 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 			return;
 		}
 
-		if (!productService.defaultChatAgent) {
-			return; // we need a default chat agent configured going forward from here
-		}
+		// DK Code has no Copilot account: there is no sign-in or setup flow and no entitlement,
+		// quota or token requests to GitHub. `context` and `requests` stay undefined, which
+		// disables the setup contributions, and chat counts as set up so that views do not
+		// wait for a sign-in that never happens.
+		ChatEntitlementContextKeys.Setup.completed.bindTo(this.contextKeyService).set(true);
 
-		const context = this.context = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementContext)));
-		this.requests = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementRequests, context.value, {
-			clearQuotas: () => this.clearQuotas(),
-			acceptQuotas: quotas => this.acceptQuotas(quotas)
-		})));
+		// Without a context, nothing else connects the setting that hides AI features to the UI.
+		this.updateHiddenContextKey();
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration(ChatAIDisabledSettingId)) {
+				this.updateHiddenContextKey();
+			}
+		}));
 
 		this.registerListeners();
 	}
@@ -730,8 +734,16 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 		} else {
 			// No ChatEntitlementContext (e.g. no defaultChatAgent in product.json).
 			// Set the context key directly as a fallback.
-			ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(hidden);
+			this.forceHidden = hidden;
+			this.updateHiddenContextKey();
 		}
+	}
+
+	private forceHidden = false;
+
+	private updateHiddenContextKey(): void {
+		const hidden = this.forceHidden || this.configurationService.getValue(ChatAIDisabledSettingId) === true;
+		ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(hidden);
 	}
 
 	async update(token: CancellationToken): Promise<void> {

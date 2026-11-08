@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 import { CancellationToken, LanguageModelChatInformation, LanguageModelChatProvider, lm, speech } from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
-import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService } from '../../../platform/networking/common/fetcherService';
@@ -136,7 +136,7 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 			}
 			this._providersRegistered = true;
 			this._logService.info(`BYOK: registered ${this._providers.size} provider(s): ${Array.from(this._providers.keys()).join(', ')}`);
-			if (!this._knownModelsRefreshed) {
+			if (!this._knownModelsRefreshed && this._configurationService.getConfig(ConfigKey.ByokFetchKnownModels)) {
 				this._knownModelsRefreshed = true;
 				void this._refreshKnownModels().catch(err => {
 					this._knownModelsRefreshed = false;

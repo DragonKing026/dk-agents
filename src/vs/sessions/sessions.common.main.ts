@@ -211,7 +211,6 @@ import '../workbench/services/accounts/browser/defaultAccount.js';
 
 // Telemetry
 import '../workbench/contrib/telemetry/browser/telemetry.contribution.js';
-import '../workbench/services/policies/browser/policyTelemetry.contribution.js';
 
 // Preferences
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';

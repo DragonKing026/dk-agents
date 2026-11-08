@@ -435,15 +435,15 @@ export interface IDefaultChatAgent {
 	readonly chatExtensionOutputId: string;
 	readonly chatExtensionOutputExtensionStateCommand: string;
 
-	readonly documentationUrl: string;
-	readonly skusDocumentationUrl: string;
-	readonly optimizeUsageDocumentationUrl: string;
-	readonly publicCodeMatchesUrl: string;
-	readonly managePlanUrl: string;
-	readonly upgradePlanUrl: string;
-	readonly signUpUrl: string;
-	readonly termsStatementUrl: string;
-	readonly privacyStatementUrl: string;
+	readonly documentationUrl?: string;
+	readonly skusDocumentationUrl?: string;
+	readonly optimizeUsageDocumentationUrl?: string;
+	readonly publicCodeMatchesUrl?: string;
+	readonly managePlanUrl?: string;
+	readonly upgradePlanUrl?: string;
+	readonly signUpUrl?: string;
+	readonly termsStatementUrl?: string;
+	readonly privacyStatementUrl?: string;
 
 	readonly provider: {
 		default: { id: string; name: string };
@@ -457,12 +457,12 @@ export interface IDefaultChatAgent {
 	readonly providerUriSetting: string;
 	readonly providerScopes: string[][];
 
-	readonly entitlementUrl: string;
-	readonly entitlementSignupLimitedUrl: string;
-	readonly tokenEntitlementUrl: string;
-	readonly mcpRegistryDataUrl: string;
+	readonly entitlementUrl?: string;
+	readonly entitlementSignupLimitedUrl?: string;
+	readonly tokenEntitlementUrl?: string;
+	readonly mcpRegistryDataUrl?: string;
 	readonly mcpConnectorsUrl?: string;
-	readonly managedSettingsUrl: string;
+	readonly managedSettingsUrl?: string;
 
 	readonly chatQuotaExceededContext: string;
 	readonly completionsQuotaExceededContext: string;

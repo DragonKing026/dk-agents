@@ -232,7 +232,7 @@ export abstract class BaseServiceConfigurationProvider implements ServiceConfigu
 			return !enabled;
 		}
 		// Fall back to the old deprecated setting
-		return configuration.get<boolean>('typescript.disableAutomaticTypeAcquisition', false);
+		return configuration.get<boolean>('typescript.disableAutomaticTypeAcquisition', true);
 	}
 
 	protected readLocale(): string | null {

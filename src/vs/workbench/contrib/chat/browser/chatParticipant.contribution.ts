@@ -72,11 +72,9 @@ const chatViewDescriptor: IViewDescriptor = {
 	ctorDescriptor: new SyncDescriptor(ChatViewPane),
 	when: ContextKeyExpr.and(
 		ChatContextKeys.accountPolicyGateActive.negate(),
+		ChatContextKeys.Setup.hidden.negate(), // the Copilot extension stays registered when AI features are hidden
 		ContextKeyExpr.or(
-			ContextKeyExpr.and(
-				ChatContextKeys.Setup.hidden.negate(),
-				ChatContextKeys.Setup.disabledInWorkspace.negate(),
-			),
+			ChatContextKeys.Setup.disabledInWorkspace.negate(),
 			ChatContextKeys.panelParticipantRegistered,
 			ChatContextKeys.extensionInvalid
 		)

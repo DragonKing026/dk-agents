@@ -391,13 +391,9 @@ const networkSettingsIds = [
 	'http.systemCertificatesNode',
 	'http.experimental.systemCertificatesV2',
 	'http.useLocalProxyConfiguration',
-	'telemetry.telemetryLevel',
-	'telemetry.enableTelemetry',
-	'telemetry.enableCrashReporter',
 ];
 const alwaysShowSettingsIds = [
 	'http.systemCertificatesNode',
-	'telemetry.telemetryLevel',
 ];
 
 function getNetworkSettings() {
