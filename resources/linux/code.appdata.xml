@@ -8,6 +8,6 @@
 	<url type="bugtracker">https://github.com/DragonKing026/dk-code/issues</url>
 	<summary>Code editor for working with AI agents</summary>
 	<description>
-		<p>DK Code is a free code editor built on the open source Code - OSS project. It has no telemetry, no extension Marketplace and makes no network requests of its own at startup.</p>
+		<p>DK Code is a free code editor built on the open source Code - OSS project. It has no telemetry and no extension Marketplace.</p>
 	</description>
 </component>

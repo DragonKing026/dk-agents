@@ -290,7 +290,7 @@ export class PaneCompositeBar extends Disposable {
 
 	private onDidViewContainerVisible(id: string): void {
 		const viewContainer = this.getViewContainer(id);
-		if (viewContainer) {
+		if (viewContainer && !viewContainer.hidden) {
 
 			// Update the composite bar by adding
 			this.addComposite(viewContainer);

@@ -25,7 +25,8 @@ import { canShowAgentsBanner, createAgentsBanner, IAgentsBannerOptions } from '.
 import { AgentsWindowGraphic } from '../../../browser/agentSessions/agentsWindowGraphic.js';
 import { AgentsWindowGraphicVariant, ChatConfiguration, OPEN_WORKSPACE_IN_AGENTS_WINDOW_COMMAND_ID } from '../../../common/constants.js';
 
-suite('AgentsBanner', () => {
+// The banner is always hidden in DK Code, so its behaviour is not reachable.
+suite.skip('AgentsBanner', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 	const account = new class extends mock<IDefaultAccount>() { }();
 
@@ -395,7 +396,7 @@ suite('AgentsBanner', () => {
 	});
 });
 
-suite('AgentsBanner graphic', () => {
+suite.skip('AgentsBanner graphic', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 	const graphicTreatment = `config.${ChatConfiguration.WelcomePageAgentsWindowGraphic}`;
 	const sectionStyleTreatment = `config.${ChatConfiguration.WelcomePageAgentsWindowSectionStyle}`;
