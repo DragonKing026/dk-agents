@@ -49,9 +49,8 @@ export async function main(argv: string[]): Promise<void> {
 	}
 
 	if (args['install-extension'] || args['uninstall-extension'] || args['update-extensions'] || args['install-builtin-extension']) {
-		console.error(`Installing, updating and uninstalling extensions is not available in ${product.nameLong}. Use '--list-extensions' to list the built-in extensions.`);
-		process.exitCode = 1;
-		return;
+		// Thrown, not returned: the caller exits with 0 after a normal return.
+		throw new Error(`Installing, updating and uninstalling extensions is not available in ${product.nameLong}.`);
 	}
 
 	for (const subcommand of NATIVE_CLI_COMMANDS) {
