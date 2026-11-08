@@ -1,0 +1,9 @@
+---
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/DragonKing026/dk-code/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
+  - name: Visual Studio Code issues
+    url: https://github.com/microsoft/vscode/issues
+    about: Problems in Visual Studio Code itself belong in the upstream project.

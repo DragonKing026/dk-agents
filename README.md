@@ -16,7 +16,28 @@ as issues.
 
 This is a one-off fork. It does not track upstream releases, and fixes are taken selectively.
 
-The previous code, based on Munder Difflin, is on the `archiwum/munder-difflin` branch.
+The previous code, based on Munder Difflin, is on the `archiwum/munder-difflin` branch. Planned work is in the
+[milestones](https://github.com/DragonKing026/dk-code/milestones).
+
+## Build from source
+
+So far this has only been done on Fedora 44.
+
+1. Install the Node.js version from [.nvmrc](.nvmrc), and the packages for native modules. On Fedora these are
+   `gcc-c++`, `make`, `python3`, `libX11-devel`, `libxkbfile-devel`, `libsecret-devel` and `krb5-devel`.
+2. Run `npm ci`, then `npm run compile`.
+3. Start it with `./scripts/code.sh`.
+
+Known problems:
+
+- The install fails if the path to the repository contains a space, see
+  [#10](https://github.com/DragonKing026/dk-code/issues/10).
+- Starting it from a terminal inside VS Code can fail because `ELECTRON_RUN_AS_NODE` is inherited. Unset that variable
+  first.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Licence
 
