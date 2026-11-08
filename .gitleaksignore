@@ -9,7 +9,6 @@
 54ebef9cd40627afad166b8128d5bed79a041972:test/voice-messages.test.cjs:generic-api-key:199
 54ebef9cd40627afad166b8128d5bed79a041972:test/voice-messages.test.cjs:slack-app-token:185
 54ebef9cd40627afad166b8128d5bed79a041972:test/voice-messages.test.cjs:stripe-access-token:191
-c402f1afed561d0cd841565e287b8c5c832fd992:build/azure-pipelines/common/sanity-tests.yml:curl-auth-user:142
 c402f1afed561d0cd841565e287b8c5c832fd992:extensions/copilot/package.json:generic-api-key:8
 c402f1afed561d0cd841565e287b8c5c832fd992:extensions/copilot/package.json:generic-api-key:9
 c402f1afed561d0cd841565e287b8c5c832fd992:extensions/copilot/src/extension/agents/vscode-node/test/askAgentProvider.spec.ts:generic-api-key:145

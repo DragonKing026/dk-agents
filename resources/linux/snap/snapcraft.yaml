@@ -1,10 +1,9 @@
 name: @@NAME@@
 version: '@@VERSION@@'
-summary: Code editing. Redefined.
+summary: Code editor for working with AI agents
 description: |
-  Visual Studio Code is a new choice of tool that combines the
-  simplicity of a code editor with what developers need for the core
-  edit-build-debug cycle.
+  DK Code is a free code editor built on the open source Code - OSS
+  project. It has no telemetry and no extension Marketplace.
 
 architectures:
   - build-on: amd64
