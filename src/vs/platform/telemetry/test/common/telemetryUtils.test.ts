@@ -7,34 +7,32 @@ import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
 import { TelemetryConfiguration, TelemetryLevel } from '../../common/telemetry.js';
-import { cleanData, cleanRemoteAuthority, getTelemetryLevel } from '../../common/telemetryUtils.js';
+import { IEnvironmentService } from '../../../environment/common/environment.js';
+import { IProductService } from '../../../product/common/productService.js';
+import { cleanData, cleanRemoteAuthority, getTelemetryLevel, supportsTelemetry } from '../../common/telemetryUtils.js';
 
 suite('TelemetryUtils', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('getTelemetryLevel fails closed for invalid configuration', () => {
+	test('getTelemetryLevel is always NONE regardless of configuration', () => {
 		assert.deepStrictEqual([
 			getTelemetryLevel(new TestConfigurationService()),
 			getTelemetryLevel(new TestConfigurationService({ 'telemetry.telemetryLevel': TelemetryConfiguration.ON })),
 			getTelemetryLevel(new TestConfigurationService({ 'telemetry.telemetryLevel': TelemetryConfiguration.ERROR })),
 			getTelemetryLevel(new TestConfigurationService({ 'telemetry.telemetryLevel': TelemetryConfiguration.CRASH })),
-			getTelemetryLevel(new TestConfigurationService({ 'telemetry.telemetryLevel': TelemetryConfiguration.OFF })),
 			getTelemetryLevel(new TestConfigurationService({ 'telemetry.telemetryLevel': 'invalid' })),
-			getTelemetryLevel(new class extends TestConfigurationService {
-				override getValue<T>(): T {
-					return null!;
-				}
-			}()),
 		], [
-			TelemetryLevel.USAGE,
-			TelemetryLevel.USAGE,
-			TelemetryLevel.ERROR,
-			TelemetryLevel.CRASH,
+			TelemetryLevel.NONE,
+			TelemetryLevel.NONE,
 			TelemetryLevel.NONE,
 			TelemetryLevel.NONE,
 			TelemetryLevel.NONE,
 		]);
+	});
+
+	test('supportsTelemetry is always false', () => {
+		assert.strictEqual(supportsTelemetry({ enableTelemetry: true, aiConfig: { ariaKey: 'test-key' } } as IProductService, { isBuilt: false, disableTelemetry: false } as IEnvironmentService), false);
 	});
 
 	suite('cleanData', () => {
