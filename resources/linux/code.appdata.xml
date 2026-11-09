@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop">
-	<id>@@NAME@@.desktop</id>
+	<id>io.github.dragonking026.dk_code</id>
+	<launchable type="desktop-id">@@NAME@@.desktop</launchable>
 	<metadata_license>@@LICENSE@@</metadata_license>
 	<project_license>@@LICENSE@@</project_license>
 	<name>@@NAME_LONG@@</name>

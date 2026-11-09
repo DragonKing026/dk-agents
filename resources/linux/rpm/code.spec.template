@@ -26,6 +26,8 @@ DK Code is a free code editor built on the open source Code - OSS project. It ha
 %define __strip @@STRIP@@
 
 %install
+# rpm 4.20+ starts this section in a per-build subdirectory, the files are prepared in BUILD
+cd %{_topdir}/BUILD
 # Destination directories
 mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_datadir}/%{name}
