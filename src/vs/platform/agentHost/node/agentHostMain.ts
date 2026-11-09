@@ -25,7 +25,7 @@ import { IAgentConfigurationService, seedMultipleChatProvidersFromEnvironment } 
 import { IAgentHostCompletions } from './agentHostCompletions.js';
 import { CopilotAgent } from './copilot/copilotAgent.js';
 import { ClaudeAgent } from './claude/claudeAgent.js';
-import { ClaudeSdkPackage } from './claude/claudeAgentSdkService.js';
+import { isClaudeCliAvailable } from './claude/claudeCliSdkService.js';
 import { CodexAgent } from './codex/codexAgent.js';
 import { CodexSdkPackage } from './codex/codexSdk.js';
 import { createCodexProviderConfiguration } from './codex/codexProviderConfiguration.js';
@@ -197,16 +197,14 @@ async function startAgentHost(): Promise<void> {
 		//     forwarded as an env var by the starters). Claude defaults to on.
 		//     Codex defaults to on outside Stable and off in Stable; if a starter
 		//     does not forward its resolved value, the host fallback is off.
-		//  2. The SDK being reachable. Claude is a devDependency of this repo
-		//     so the bare-import path in `ClaudeAgentSdkService._loadSdk`
-		//     always succeeds in dev; in built products the SDK ships via
-		//     `product.agentSdks.claude` and the downloader handles it. Codex
-		//     is likewise a devDependency, so `CodexAgent._resolveSdkRoot`
+		//  2. The Claude Code CLI (`claude`) being installed: the provider talks to
+		//     the user's own binary (see `ClaudeCliSdkService`), found on `PATH`.
+		//     Codex is a devDependency, so `CodexAgent._resolveSdkRoot`
 		//     resolves it from `node_modules` in dev; built products use the
 		//     env-var override or a `product.agentSdks.codex` entry.
 		// If either gate fails, the provider is not registered and never appears
 		// in the agent picker (matches the pre-CDN UX exactly).
-		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
+		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && await isClaudeCliAvailable()) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
 		}
 		// Codex registration is one-way (register-on-enable): the env-var toggle

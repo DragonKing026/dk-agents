@@ -23,48 +23,16 @@ export interface IClaudeTransportModeInputs {
 }
 
 /**
- * Which transport should the Claude provider fall back to right now? Pure
- * decision; precedence, highest first:
- *
- *  1. Signed in to GitHub prefers Copilot (proxy).
- *  2. Signed out but with the user's own Claude credentials uses native (no GitHub).
- *  3. Nothing usable still falls back to proxy — the safe end, since attempting
- *     native with no credential would fail inside the SDK rather than at a
- *     surface that can explain itself.
- *
- * This is only the *fallback* for a session whose model names no provider. A
- * provider-qualified model routes on its own provider
- * (`resolveClaudeSessionTransport`), so getting this decision right is what lets
- * a signed-out user with their own credentials start working without being
- * forced to sign in.
- *
- * The result is **not** an input to the Agents window's sign-in gate, and
- * resolving to `proxy` does not by itself make the session type "require GitHub".
- * `getProtectedResources()` marks the Copilot resource `required: false`
- * unconditionally, so nothing decided here can raise a sign-in wall. What
- * separates `None` from `Unusable` downstream is the *model count*, published
- * from the same `accountInfo()` answer that feeds `hasExistingSetup` here — so
- * the two cannot disagree about one user. The proxy fallback of case 3 only
- * bites at use time, when a model-less session materializes with no proxy handle
- * and `_ensureAuthenticated` raises `AHP_AUTH_REQUIRED`.
- *
- * There is deliberately no host-global setting to *prefer* a transport. Since
- * the picker offers both providers' models side by side, transport is downstream
- * of the model the user picked; a flag would keep disagreeing with what the
- * picker shows (it could not stop a Copilot-routed model from being offered or
- * chosen, because neither model enumeration nor the advertised protected
- * resources would consult it). Expressing a preference is a *model*-selection
- * concern — a default/sticky model — not a transport one.
+ * Which transport should the Claude provider use? Always `native`: DK Code runs
+ * the user's own Claude Code CLI on the user's own login and never routes
+ * Claude through the Copilot proxy, whatever the inputs say. The inputs are
+ * kept so callers and the proxy code path stay untouched until that code is
+ * removed.
  */
-export function resolveClaudeTransportMode(inputs: IClaudeTransportModeInputs): ClaudeTransportMode {
-	const { hasGitHubToken, hasExistingSetup } = inputs;
-	if (hasGitHubToken) {
-		return 'proxy';
-	}
-	if (hasExistingSetup) {
-		return 'native';
-	}
-	return 'proxy';
+export function resolveClaudeTransportMode(_inputs: IClaudeTransportModeInputs): ClaudeTransportMode {
+	// DK Code never routes Claude through the Copilot proxy: the Claude Code CLI
+	// runs on the user's own login.
+	return 'native';
 }
 
 /**
@@ -92,6 +60,11 @@ export function isClaudeAccountSetUp(account: AccountInfo | undefined): boolean 
 	}
 	// `tokenSource` spells "no credential" as `'none'` rather than absence;
 	// `apiKeySource` has only ever been observed absent in that case.
+	// The CLI's own `initialize` report of a subscription login (`claude login`)
+	// carries the plan and the e-mail but no `tokenSource`, so either one also
+	// means a usable account.
 	return (account.tokenSource !== undefined && account.tokenSource !== 'none')
-		|| account.apiKeySource !== undefined;
+		|| account.apiKeySource !== undefined
+		|| account.subscriptionType !== undefined
+		|| account.email !== undefined;
 }
