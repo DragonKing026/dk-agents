@@ -45,7 +45,8 @@ echo "=== version"
 dk-code --version
 
 echo "=== native modules"
-find "$APP/resources/app/node_modules.asar.unpacked" "$APP/resources/app/extensions/copilot" -name '*.node' -path '*linux*' -o -name '*.node' -path '*build/Release*' -not -path '*/obj.target/*' > /tmp/modules.txt
+find "$APP/resources/app/node_modules.asar.unpacked" -name '*.node' \( -path '*/prebuilds/linux-x64/*' -o -path '*-linux-x64*' -o -path '*/build/Release/*' \) -not -path '*/obj.target/*' > /tmp/modules.txt
+test "$(wc -l < /tmp/modules.txt)" -ge 10
 ELECTRON_RUN_AS_NODE=1 "$APP/dk-code" -e '
 const fs = require("fs");
 for (const file of fs.readFileSync("/tmp/modules.txt", "utf8").trim().split("\n")) {
@@ -76,15 +77,19 @@ fi
 test -s "$PROFILE/User/globalStorage/state.vscdb"
 import -display :99 -window root "$OUT/window.png"
 cat "$PROFILE"/logs/*/main.log > "$OUT/main.log"
-if grep -h -E 'Cannot find module|ERR_DLOPEN|GLIBC_' "$PROFILE"/logs/*/*.log "$PROFILE"/logs/*/*/*.log; then
-  echo "Errors in the logs" >&2
-  exit 1
-fi
+status=0
+grep -r -h -E 'Cannot find module|ERR_DLOPEN|GLIBC_' --include='*.log' "$PROFILE/logs" || status=$?
+case $status in
+  0) echo "Errors in the logs" >&2; exit 1 ;;
+  1) ;;
+  *) echo "Cannot read the logs" >&2; exit 1 ;;
+esac
 pkill -f "$APP/dk-code" || true
 EOF
   chmod 755 /tmp/run-as-tester.sh
-  chmod 777 "$OUT_INSIDE"
+  chown tester "$OUT_INSIDE"
   su tester -c /tmp/run-as-tester.sh
+  chown -R "$HOST_IDS" "$OUT_INSIDE"
 
   echo "=== remove"
   case "$package" in
@@ -123,8 +128,10 @@ if [ $# -ge 4 ]; then
   INNER+=("/pkg/$(basename "$VSCODE")")
 fi
 
-# The SUID sandbox needs these to work inside a container, on a normal system it needs nothing.
+# The SUID sandbox needs these to work inside a container, on a normal system it needs nothing. The package
+# scripts run as root in this wide container, so use it only for our own builds.
 docker run --rm \
   --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined --shm-size=1g \
+  -e HOST_IDS="$(id -u):$(id -g)" \
   -v "$SCRIPT:/verify-package.sh:ro" -v "$OUT:/out" "${ARGS[@]}" \
   "$IMAGE" bash /verify-package.sh --inside "${INNER[@]}"

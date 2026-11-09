@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Toolchain for the native modules of a release build. Source it before `npm rebuild` or `npm ci`.
+# Toolchain for the native modules of a release build. Source it from the repository root before `npm rebuild`
+# or `npm ci`: `source build/linux/setup-env.sh`.
 #
 # Without it node-gyp uses the host compiler, so the modules require the glibc and libstdc++ of the build
 # machine and the packages do not run on older systems. This builds them like Electron itself: Chromium clang,
@@ -8,32 +9,46 @@
 # Based on build/azure-pipelines/linux/setup-env.sh from microsoft/vscode 1.145.2 (MIT): x64 only, without the
 # remote server toolchain and without writing to ~/.gyp.
 
-set -e
+(return 0 2>/dev/null) || { echo "Source this file: source $0" >&2; exit 1; }
 
-VSCODE_CLIENT_SYSROOT_DIR=$PWD/.build/sysroots/glibc-2.28-gcc-10.5.0
-if [ -d "$VSCODE_CLIENT_SYSROOT_DIR" ]; then
-  echo "Using cached client sysroot"
-else
-  echo "Downloading client sysroot"
-  VSCODE_SYSROOT_DIR="$VSCODE_CLIENT_SYSROOT_DIR" node -e 'import { getVSCodeSysroot } from "./build/linux/debian/install-sysroot.ts"; (async () => { await getVSCodeSysroot("amd64"); })()'
-fi
+dk_setup_env() {
+  case $PWD in
+    *" "*)
+      echo "The path contains a space, node-gyp splits CC and CXXFLAGS on it. Build from a path without spaces." >&2
+      return 1
+      ;;
+  esac
 
-if [ ! -x "$PWD/.build/CR_Clang/bin/clang" ]; then
-  echo "Downloading Chromium clang"
-  mkdir -p .build
-  CLANG_UPDATE_PY="$PWD/.build/clang-update.py" node -e 'import { downloadChromiumFile } from "./build/lib/chromiumSource.ts"; downloadChromiumFile("tools/clang/scripts/update.py", process.env["CLANG_UPDATE_PY"]);'
-  python3 "$PWD/.build/clang-update.py" --output-dir="$PWD/.build/CR_Clang" --host-os=linux
-fi
+  local client_sysroot=$PWD/.build/sysroots/glibc-2.28-gcc-10.5.0
+  # Skips the download when the stamp it writes after a complete download is there.
+  VSCODE_SYSROOT_DIR="$client_sysroot" node -e 'import { getVSCodeSysroot } from "./build/linux/debian/install-sysroot.ts"; (async () => { await getVSCodeSysroot("amd64"); })()' || return 1
 
-DEBUG=libcxx-fetcher \
-VSCODE_LIBCXX_OBJECTS_DIR=$PWD/.build/libcxx-objects \
-VSCODE_LIBCXX_HEADERS_DIR=$PWD/.build/libcxx_headers \
-VSCODE_LIBCXXABI_HEADERS_DIR=$PWD/.build/libcxxabi_headers \
-VSCODE_ARCH=x64 \
-node build/linux/libcxx-fetcher.ts
+  if [ ! -x "$PWD/.build/CR_Clang/bin/clang" ]; then
+    echo "Downloading Chromium clang"
+    local partial=$PWD/.build/CR_Clang.partial
+    rm -rf "$partial"
+    mkdir -p "$partial"
+    CLANG_UPDATE_PY="$partial/update.py" node -e 'import { downloadChromiumFile } from "./build/lib/chromiumSource.ts"; downloadChromiumFile("tools/clang/scripts/update.py", process.env["CLANG_UPDATE_PY"]);' || return 1
+    python3 "$partial/update.py" --output-dir="$partial/clang" --host-os=linux || return 1
+    mv "$partial/clang" "$PWD/.build/CR_Clang"
+    rm -rf "$partial"
+  fi
 
-SYSROOT=$VSCODE_CLIENT_SYSROOT_DIR/x86_64-linux-gnu/x86_64-linux-gnu/sysroot
-export CC="$PWD/.build/CR_Clang/bin/clang --gcc-toolchain=$VSCODE_CLIENT_SYSROOT_DIR/x86_64-linux-gnu"
-export CXX="$PWD/.build/CR_Clang/bin/clang++ --gcc-toolchain=$VSCODE_CLIENT_SYSROOT_DIR/x86_64-linux-gnu"
-export CXXFLAGS="-nostdinc++ -D__NO_INLINE__ -DSPDLOG_USE_STD_FORMAT -I$PWD/.build/libcxx_headers -isystem$PWD/.build/libcxx_headers/include -isystem$PWD/.build/libcxxabi_headers/include -fPIC -flto=thin -fsplit-lto-unit -D_LIBCPP_ABI_NAMESPACE=Cr -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE --sysroot=$SYSROOT"
-export LDFLAGS="-stdlib=libc++ --sysroot=$SYSROOT -fuse-ld=lld -flto=thin -L$PWD/.build/libcxx-objects -lc++abi -L$SYSROOT/usr/lib/x86_64-linux-gnu -L$SYSROOT/lib/x86_64-linux-gnu -Wl,--lto-O0"
+  DEBUG=libcxx-fetcher \
+  VSCODE_LIBCXX_OBJECTS_DIR=$PWD/.build/libcxx-objects \
+  VSCODE_LIBCXX_HEADERS_DIR=$PWD/.build/libcxx_headers \
+  VSCODE_LIBCXXABI_HEADERS_DIR=$PWD/.build/libcxxabi_headers \
+  VSCODE_ARCH=x64 \
+  node build/linux/libcxx-fetcher.ts || return 1
+
+  local sysroot=$client_sysroot/x86_64-linux-gnu/x86_64-linux-gnu/sysroot
+  export CC="$PWD/.build/CR_Clang/bin/clang --gcc-toolchain=$client_sysroot/x86_64-linux-gnu"
+  export CXX="$PWD/.build/CR_Clang/bin/clang++ --gcc-toolchain=$client_sysroot/x86_64-linux-gnu"
+  export CXXFLAGS="-nostdinc++ -D__NO_INLINE__ -DSPDLOG_USE_STD_FORMAT -I$PWD/.build/libcxx_headers -isystem$PWD/.build/libcxx_headers/include -isystem$PWD/.build/libcxxabi_headers/include -fPIC -flto=thin -fsplit-lto-unit -D_LIBCPP_ABI_NAMESPACE=Cr -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE --sysroot=$sysroot"
+  export LDFLAGS="-stdlib=libc++ --sysroot=$sysroot -fuse-ld=lld -flto=thin -L$PWD/.build/libcxx-objects -lc++abi -L$sysroot/usr/lib/x86_64-linux-gnu -L$sysroot/lib/x86_64-linux-gnu -Wl,--lto-O0"
+}
+
+dk_setup_env
+dk_setup_env_status=$?
+unset -f dk_setup_env
+return $dk_setup_env_status

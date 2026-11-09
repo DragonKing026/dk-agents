@@ -23,16 +23,16 @@ fi
 
 REPO_DIR=$(realpath "$(dirname "$0")/../..")
 SYSROOT=.build/sysroots/glibc-2.28-gcc-10.5.0
-CACHE_DIR="$REPO_DIR/.build/package-cache"
-mkdir -p "$CACHE_DIR"
-
 run_gulp() {
   local image=$1 format=$2
+  # HOME and the temporary files of one format, kept between runs for the downloaded Debian sysroot.
+  local cache_dir="$REPO_DIR/.build/package-cache/$format"
+  mkdir -p "$cache_dir"
   docker run --rm --user "$(id -u):$(id -g)" \
     -v "$REPO_DIR:/src" \
     -v "$APP_DIR:/VSCode-linux-x64:ro" \
     -v "$NODE_DIR:/node:ro" \
-    -v "$CACHE_DIR:/tmp" \
+    -v "$cache_dir:/tmp" \
     -w /src \
     -e HOME=/tmp \
     -e VSCODE_SYSROOT_DIR="/src/$SYSROOT" \
