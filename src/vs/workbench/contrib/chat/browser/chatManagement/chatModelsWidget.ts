@@ -185,7 +185,7 @@ export function buildAddModelsDropdownActions(
 	}
 
 	// Sort vendors alphabetically by displayName, but sink deprecated providers (those declaring a
-	// `deprecation.link`, e.g. Ollama) to the end of the list. "OpenAI Compatible (Deprecated)" (customoai)
+	// `deprecation.link`) to the end of the list. "OpenAI Compatible (Deprecated)" (customoai)
 	// is pinned after the sorted list and "Custom Endpoint" (customendpoint) after a separator at the very end.
 	const customEndpointVendor = configurableVendors.find(v => v.vendor === 'customendpoint');
 	const customOaiVendor = configurableVendors.find(v => v.vendor === 'customoai');

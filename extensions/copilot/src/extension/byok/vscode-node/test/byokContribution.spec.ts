@@ -42,7 +42,7 @@ vi.mock('vscode', async importOriginal => ({
 import { BYOKContrib } from '../byokContribution';
 
 describe('BYOKContrib', () => {
-	test.each([true, false])('re-registers providers without churning on token resets (speech enabled: %s)', speechEnabled => {
+	test.each([true, false])('keeps providers registered whatever the GitHub sign-in and Copilot token state (speech enabled: %s)', speechEnabled => {
 		const registrationError = new Error('Extension \'GitHub.copilot-chat\' CANNOT use API proposal: speech.');
 		if (!speechEnabled) {
 			vi.mocked(speech.registerVoiceLiveSessionProvider).mockImplementationOnce(() => {
@@ -81,10 +81,10 @@ describe('BYOKContrib', () => {
 		const voiceLiveProviders = speechEnabled ? 1 : 0;
 		expect({ states, errors: logError.mock.calls }).toEqual({
 			states: [
-				{ languageModelProviders: 0, voiceLiveProviders },
 				{ languageModelProviders: 9, voiceLiveProviders },
 				{ languageModelProviders: 9, voiceLiveProviders },
-				{ languageModelProviders: 0, voiceLiveProviders },
+				{ languageModelProviders: 9, voiceLiveProviders },
+				{ languageModelProviders: 9, voiceLiveProviders },
 				{ languageModelProviders: 0, voiceLiveProviders: 0 },
 			],
 			errors: speechEnabled ? [] : [[registrationError, 'BYOK: failed to register GPT-Live voice provider.']],

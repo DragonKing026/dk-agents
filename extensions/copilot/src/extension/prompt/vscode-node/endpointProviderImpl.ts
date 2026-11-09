@@ -237,8 +237,8 @@ export class ProductionEndpointProvider extends Disposable implements IEndpointP
 		const value = this._configService.getNonExtensionConfig<unknown>(ProductionEndpointProvider.BYOK_UTILITY_MODEL_DEFAULT_CONFIG_KEY);
 		switch (value) {
 			case undefined:
-				// Preserve the Copilot default when running against a core that does not register this setting.
-				return BYOKUtilityModelDefault.Copilot;
+				// Same default as the core setting: DK Code has no Copilot account to fall back to.
+				return BYOKUtilityModelDefault.MainAgent;
 			case BYOKUtilityModelDefault.None:
 			case BYOKUtilityModelDefault.MainAgent:
 			case BYOKUtilityModelDefault.Copilot:

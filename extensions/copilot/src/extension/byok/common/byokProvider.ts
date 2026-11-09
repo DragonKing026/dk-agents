@@ -221,16 +221,12 @@ export function byokKnownModelToAPIInfo(providerName: string, id: string, capabi
 }
 
 /**
- * Signed-out users are allowed; signed-in users without a Copilot token (e.g. enterprise-managed errors) are denied to avoid bypassing policy.
+ * DK Code has no Copilot account or organization policy behind the models: the user's own keys and local
+ * servers are always allowed, whatever the GitHub sign-in state. A GitHub session without a Copilot token
+ * (for example one used only for pull requests) must not hide them.
  */
-export function isClientBYOKAllowed(hasGitHubSession: boolean, copilotToken: Omit<CopilotToken, 'token'> | undefined): boolean {
-	if (!hasGitHubSession) {
-		return true;
-	}
-	if (!copilotToken) {
-		return false;
-	}
-	return copilotToken.isInternal || copilotToken.isIndividual || copilotToken.isClientBYOKEnabled();
+export function isClientBYOKAllowed(_hasGitHubSession: boolean, _copilotToken: Omit<CopilotToken, 'token'> | undefined): boolean {
+	return true;
 }
 
 /**

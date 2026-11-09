@@ -856,7 +856,7 @@ export const platformRootSchema = createSchema({
 			localize('agentHost.config.byokUtilityModelDefault.mainAgent', "Use the selected BYOK main agent model."),
 			localize('agentHost.config.byokUtilityModelDefault.copilot', "Use the default GitHub Copilot utility model."),
 		],
-		default: 'copilot',
+		default: 'mainAgent',
 	}),
 	[AgentHostCodexEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
