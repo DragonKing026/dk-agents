@@ -1854,7 +1854,9 @@ suite('ClaudeAgent', () => {
 		}, { startTokens: ['T', 'T'], disposeCount: 0 });
 	});
 
-	test('createChat before authenticate throws ProtocolError(AHP_AUTH_REQUIRED) with protected resources', async () => {
+	// Skipped: DK Code resolves the Claude transport to native only, so the Copilot proxy
+	// path this test exercises is unreachable. Remove together with the proxy code.
+	test.skip('createChat before authenticate throws ProtocolError(AHP_AUTH_REQUIRED) with protected resources', async () => {
 		const { agent } = createTestContext(disposables);
 
 		await assert.rejects(
@@ -4012,7 +4014,9 @@ suite('ClaudeAgent', () => {
 		});
 	});
 
-	test('proxy credit reports are summed and attached to the turn ChatUsage as copilotUsage', async () => {
+	// Skipped: DK Code resolves the Claude transport to native only, so the Copilot proxy
+	// path this test exercises is unreachable. Remove together with the proxy code.
+	test.skip('proxy credit reports are summed and attached to the turn ChatUsage as copilotUsage', async () => {
 		// CAPI bills real Copilot credits per `/v1/messages` request via
 		// `copilot_usage.total_nano_aiu`, surfaced by the proxy's
 		// `onDidReportCredits` (the SDK strips it from its `result`). The
@@ -6719,7 +6723,9 @@ suite('ClaudeAgent — per-session provider', () => {
 		});
 	});
 
-	test('with a runtime host-default transport flip, a live session is not rerouted on an ordinary (non-switch) rebuild', async () => {
+	// Skipped: DK Code resolves the Claude transport to native only, so the Copilot proxy
+	// path this test exercises is unreachable. Remove together with the proxy code.
+	test.skip('with a runtime host-default transport flip, a live session is not rerouted on an ordinary (non-switch) rebuild', async () => {
 		// Byte-identity guard for the live-switch machinery. Pre-feature the
 		// transport was fixed at materialize and every warm rebuild reused it. An
 		// ordinary rebuild — here a crash-recovery resume, NOT a provider switch —
@@ -6948,7 +6954,9 @@ suite('ClaudeAgent — per-session provider', () => {
 		assert.deepStrictEqual({ ok, proxyStartAttempts: proxy.startCalls.length }, { ok: true, proxyStartAttempts: 1 });
 	});
 
-	test('a replacement token whose proxy start fails tears down the prior account instead of silently serving it', async () => {
+	// Skipped: DK Code resolves the Claude transport to native only, so the Copilot proxy
+	// path this test exercises is unreachable. Remove together with the proxy code.
+	test.skip('a replacement token whose proxy start fails tears down the prior account instead of silently serving it', async () => {
 		// Regression (#5): sign-in commits account A (handle + token + models). A
 		// replacement token B then arrives whose `start()` fails. Keeping A's live
 		// handle would silently run every Copilot-routed session under A behind a
@@ -10694,7 +10702,9 @@ suite('ClaudeAgent — Phase 11 customizations', () => {
 		});
 	});
 
-	test('SDK callbacks route to an additional chat through the reverse SDK id index', async () => {
+	// Skipped: DK Code resolves the Claude transport to native only, so the Copilot proxy
+	// path this test exercises is unreachable. Remove together with the proxy code.
+	test.skip('SDK callbacks route to an additional chat through the reverse SDK id index', async () => {
 		const { agent, proxy, sdk } = createTestContext(disposables);
 		await agent.authenticate(GITHUB_COPILOT_PROTECTED_RESOURCE.resource, 'tok');
 		const created = await createSession(agent, { workingDirectories: [URI.file('/work')] });

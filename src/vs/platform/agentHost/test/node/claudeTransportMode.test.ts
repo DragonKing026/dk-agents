@@ -12,7 +12,7 @@ suite('claudeTransportMode', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('resolveClaudeTransportMode precedence over the full input matrix', () => {
+	test('resolveClaudeTransportMode is native over the full input matrix', () => {
 		const bools: readonly boolean[] = [false, true];
 
 		const actual: Record<string, string> = {};
@@ -24,10 +24,10 @@ suite('claudeTransportMode', () => {
 		}
 
 		assert.deepStrictEqual(actual, {
-			'token=false,setup=false': 'proxy',
+			'token=false,setup=false': 'native',
 			'token=false,setup=true': 'native',
-			'token=true,setup=false': 'proxy',
-			'token=true,setup=true': 'proxy',
+			'token=true,setup=false': 'native',
+			'token=true,setup=true': 'native',
 		});
 	});
 
@@ -55,6 +55,9 @@ suite('claudeTransportMode', () => {
 			// The rows a later "simplification" silently breaks: for third-party
 			// backends the SDK documents the credential fields as absent, because
 			// auth is external (AWS creds, gcloud ADC).
+			// The CLI's `initialize` report of a subscription login, measured on
+			// Claude Code 2.1.319 on Linux: no `tokenSource`, but the plan and e-mail.
+			['subscription login via the CLI', { email: 'user@example.invalid', organization: 'org', subscriptionType: 'Claude Max', apiProvider: 'firstParty' }, true],
 			['third-party backend (bedrock)', { apiProvider: 'bedrock' }, true],
 			['third-party backend (vertex)', { apiProvider: 'vertex' }, true],
 			['enterprise gateway', { apiProvider: 'gateway' }, true],
