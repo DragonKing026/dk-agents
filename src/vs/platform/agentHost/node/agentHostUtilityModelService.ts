@@ -264,7 +264,7 @@ export class AgentHostUtilityModelService implements IAgentHostUtilityModelServi
 	}
 
 	private _byokUtilityModelDefault(): AgentHostByokUtilityModelDefault {
-		return this._configurationService.getRootValue(platformRootSchema, AgentHostByokUtilityModelDefaultConfigKey) ?? 'copilot';
+		return this._configurationService.getRootValue(platformRootSchema, AgentHostByokUtilityModelDefaultConfigKey) ?? 'mainAgent';
 	}
 
 	private async _byokChatCompletion(vendor: string, modelId: string, request: ICopilotUtilityChatCompletionRequest, signal: AbortSignal | undefined): Promise<string> {

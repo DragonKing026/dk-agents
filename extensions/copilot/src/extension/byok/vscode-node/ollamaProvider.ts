@@ -27,6 +27,12 @@ interface OllamaModelInfoAPIResponse {
 	};
 }
 
+interface OllamaTagsModel {
+	model: string;
+	/** Set by Ollama for cloud models: the request is forwarded to this host instead of running locally. */
+	remote_host?: string;
+}
+
 interface OllamaVersionResponse {
 	version: string;
 }
@@ -96,7 +102,7 @@ export class OllamaLMProvider extends AbstractOpenAICompatibleLMProvider<OllamaC
 			await this._checkOllamaVersion(ollamaBaseUrl);
 
 			const response = await this._fetcherService.fetch(`${ollamaBaseUrl}/api/tags`, { method: 'GET', callSite: 'ollama-tags' });
-			const models = (await response.json()).models;
+			const models: OllamaTagsModel[] = (await response.json()).models;
 			this._knownModels = {};
 			for (const model of models) {
 				let modelInfo = this._modelCache.get(`${ollamaBaseUrl}/${model.model}`);
@@ -114,7 +120,8 @@ export class OllamaLMProvider extends AbstractOpenAICompatibleLMProvider<OllamaC
 				this._knownModels[modelInfo.id] = {
 					maxInputTokens: modelInfo.capabilities.limits?.max_prompt_tokens ?? 4096,
 					maxOutputTokens: modelInfo.capabilities.limits?.max_output_tokens ?? 4096,
-					name: modelInfo.name,
+					// Cloud models send the conversation, code included, off this machine; say so in the picker.
+					name: model.remote_host ? `${modelInfo.name} (cloud)` : modelInfo.name,
 					toolCalling: !!modelInfo.capabilities.supports.tool_calls,
 					vision: !!modelInfo.capabilities.supports.vision
 				};
@@ -130,7 +137,7 @@ export class OllamaLMProvider extends AbstractOpenAICompatibleLMProvider<OllamaC
 			if (e instanceof Error && e.message.includes('Ollama server version')) {
 				throw e;
 			}
-			throw new Error('Failed to fetch models from Ollama. Please ensure Ollama is running. If ollama is on another host, please configure the `"github.copilot.chat.byok.ollamaEndpoint"` setting.');
+			throw new Error(`Failed to fetch models from Ollama at ${ollamaBaseUrl}. Please ensure Ollama is running, or change the URL of the Ollama model group.`);
 		}
 	}
 
