@@ -16,14 +16,41 @@ import { ChatRequestTurn } from '../../../vscodeTypes';
 import { renderPromptElement } from '../../prompts/node/base/promptRenderer';
 import { TitlePrompt } from '../../prompts/node/panel/title';
 
+/**
+ * Resolves the identifier a chat request turn carries in `modelId` (`vendor/id` or
+ * `vendor/group/id`) to the language model it names, or `undefined` when none matches.
+ */
+export type ResolveLanguageModel = (modelIdentifier: string) => Promise<vscode.LanguageModelChat | undefined>;
+
 export class ChatTitleProvider implements vscode.ChatTitleProvider {
 
 	constructor(
+		private readonly resolveLanguageModel: ResolveLanguageModel | undefined,
 		@ILogService private readonly logService: ILogService,
 		@IEndpointProvider private endpointProvider: IEndpointProvider,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IRequestLogger private readonly requestLogger: IRequestLogger,
 	) { }
+
+	/**
+	 * The title is generated while the first request is still starting, so the endpoint provider
+	 * may not know the BYOK model of that request yet. Without it the utility endpoint falls back
+	 * to a Copilot model and fails without a Copilot account. Passing the model to the provider
+	 * records it exactly like the main request does, which keeps the utility model settings working.
+	 */
+	private async registerRequestModel(modelIdentifier: string | undefined): Promise<void> {
+		if (!modelIdentifier || !this.resolveLanguageModel) {
+			return;
+		}
+		try {
+			const model = await this.resolveLanguageModel(modelIdentifier);
+			if (model) {
+				await this.endpointProvider.getChatEndpoint(model);
+			}
+		} catch (error) {
+			this.logService.warn(`Could not resolve model '${modelIdentifier}' for the conversation title: ${error}`);
+		}
+	}
 
 	async provideChatTitle(
 		context: vscode.ChatContext,
@@ -41,6 +68,8 @@ export class ChatTitleProvider implements vscode.ChatTitleProvider {
 		const sessionResource = context.sessionResource;
 		const parentChatSessionId = sessionResource ? sessionResourceToId(URI.from(sessionResource)) : undefined;
 
+		// `ChatRequestTurn` and `ChatRequestTurn2` are the same class in the extension host; only `ChatRequestTurn2` declares `modelId`.
+		await this.registerRequestModel((firstRequest as vscode.ChatRequestTurn2).modelId);
 		const endpoint = await this.endpointProvider.getChatEndpoint('copilot-utility-small');
 		const { messages } = await renderPromptElement(this.instantiationService, endpoint, TitlePrompt, { userRequest: firstRequest.prompt });
 
@@ -88,4 +117,18 @@ export class ChatTitleProvider implements vscode.ChatTitleProvider {
 			return '';
 		}
 	}
+}
+
+/**
+ * Picks the model a `vendor/id` or `vendor/group/id` identifier names from the models of that
+ * vendor. Never guesses: an identifier that matches no model gives `undefined`.
+ */
+export function findModelByIdentifier(models: readonly vscode.LanguageModelChat[], modelIdentifier: string): vscode.LanguageModelChat | undefined {
+	const slash = modelIdentifier.indexOf('/');
+	if (slash <= 0) {
+		return undefined;
+	}
+	const vendor = modelIdentifier.substring(0, slash);
+	const rest = modelIdentifier.substring(slash + 1);
+	return models.find(m => m.vendor === vendor && (m.id === rest || rest.endsWith('/' + m.id)));
 }
