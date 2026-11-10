@@ -12,7 +12,7 @@ import { ActionType } from '../../common/state/sessionActions.js';
 import { ResponsePartKind, ToolCallConfirmationReason, ToolCallContributorKind } from '../../common/state/sessionState.js';
 import type { ClaudeMapperState } from './claudeMapSessionEvents.js';
 import { SUBAGENT_TOOL_NAMES, type SubagentRegistry } from './claudeSubagentRegistry.js';
-import { buildClaudeToolCallMeta, buildClaudeToolMeta, getClaudeInvocationMessage, getClaudeToolDisplayName, getClaudeToolInputString } from './claudeToolDisplay.js';
+import { buildClaudeClientToolMeta, buildClaudeToolCallMeta, buildClaudeToolMeta, getClaudeInvocationMessage, getClaudeToolDisplayName, getClaudeToolInputString } from './claudeToolDisplay.js';
 import { hasClientToolNamePrefix, stripClientToolNamePrefix } from './clientTools/claudeClientToolMcpServer.js';
 import type { SessionClientToolsModel } from './clientTools/claudeSessionClientToolsModel.js';
 
@@ -274,7 +274,7 @@ export function emitInnerAssistantSignals(
 			state.toolCalls.seedParsedInput(block.id, block.input);
 			registry.noteInnerTool(block.id, parentToolUseId);
 			const displayName = isClientTool ? toolName : getClaudeToolDisplayName(toolName);
-			const meta = isClientTool ? undefined : buildClaudeToolMeta(toolName);
+			const meta = isClientTool ? buildClaudeClientToolMeta(toolName) : buildClaudeToolMeta(toolName);
 			const info = state.toolCalls.lookup(block.id)?.info;
 			const toolInputStr = info?.toolInput ?? getClaudeToolInputString(toolName, block.input);
 			signals.push({

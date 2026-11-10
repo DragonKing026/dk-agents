@@ -298,6 +298,30 @@ export function buildClaudeToolCallMeta(toolName: string): IToolCallMeta | undef
 	return { toolKind: row.toolKind };
 }
 
+/**
+ * Workbench tools published to the CLI that the renderer must draw as a
+ * terminal command, keyed by their unprefixed client-tool name. They are not
+ * in `TOOL_ROWS` (that table is the SDK's built-in tools), so
+ * {@link buildClaudeToolMeta} cannot see them.
+ */
+const CLIENT_TOOL_KINDS: Readonly<Record<string, ClaudeToolKind>> = {
+	runInTerminal: 'terminal',
+};
+
+/**
+ * `_meta` for a call to a client tool (`mcp__client__<name>`, with the prefix
+ * already stripped), so the renderer treats it like the equivalent built-in:
+ * the Copilot provider stamps `toolKind` and `language` on its client terminal
+ * tool the same way. `undefined` for client tools without a rendering hint.
+ */
+export function buildClaudeClientToolMeta(toolName: string): Record<string, unknown> | undefined {
+	const toolKind = Object.hasOwn(CLIENT_TOOL_KINDS, toolName) ? CLIENT_TOOL_KINDS[toolName] : undefined;
+	if (!toolKind) {
+		return undefined;
+	}
+	return toToolCallMeta({ toolKind, ...(toolKind === 'terminal' ? { language: 'shellscript' } : {}) });
+}
+
 function md(value: string): StringOrMarkdown {
 	return { markdown: value };
 }

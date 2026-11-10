@@ -14,7 +14,7 @@ import { buildTopLevelSubagentReadyAction, emitInnerAssistantSignals, mapSubagen
 import type { SubagentRegistry } from './claudeSubagentRegistry.js';
 import { normalizeClaudeToolName } from './claudeEditorToolMcpServer.js';
 import { stripClientToolNamePrefix, hasClientToolNamePrefix } from './clientTools/claudeClientToolMcpServer.js';
-import { buildClaudeToolMeta, getClaudePastTenseMessage, getClaudeToolDisplayName, isClaudeFileEditTool } from './claudeToolDisplay.js';
+import { buildClaudeClientToolMeta, buildClaudeToolMeta, getClaudePastTenseMessage, getClaudeToolDisplayName, isClaudeFileEditTool } from './claudeToolDisplay.js';
 import { claudeToolDenialCode } from './claudeToolDenial.js';
 import { ClaudeToolCallRegistry } from './claudeToolCallRegistry.js';
 import { ToolCallConfirmationReason, ToolCallContributorKind, type StringOrMarkdown } from '../../common/state/protocol/state.js';
@@ -665,7 +665,7 @@ function mapStreamEvent(
 				// state transitions (D6). Subagent meta from Phase 12 is now
 				// produced by `buildClaudeToolMeta` because
 				// `getClaudeToolKind('Task') === 'subagent'`.
-				const meta = isClientTool ? undefined : buildClaudeToolMeta(toolName);
+				const meta = isClientTool ? buildClaudeClientToolMeta(toolName) : buildClaudeToolMeta(toolName);
 				const toolClientId = isClientTool ? clientTools?.ownerOf(toolName) : undefined;
 				return [{
 					kind: 'action',
@@ -752,7 +752,7 @@ function mapStreamEvent(
 			if (!info) {
 				return [];
 			}
-			const meta = tracked.isClientTool ? undefined : buildClaudeToolMeta(tracked.toolName);
+			const meta = tracked.isClientTool ? buildClaudeClientToolMeta(tracked.toolName) : buildClaudeToolMeta(tracked.toolName);
 			const signals: AgentSignal[] = [];
 			if (finalStreamingUpdate) {
 				signals.push(fileEditToolDelta(chat, turnId, tracked.toolUseId, finalStreamingUpdate.invocationMessage));

@@ -498,6 +498,70 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 		});
 	});
 
+	test('the client terminal tool is stamped as a terminal call and carries its command', () => {
+		const state = new ClaudeMapperState();
+		const resolver = r();
+		const clientTools = new SessionClientToolsModel();
+		clientTools.setTools('client-1', [{ name: 'runInTerminal', inputSchema: { type: 'object' } }]);
+		const terminalMeta = { toolKind: 'terminal', language: 'shellscript' };
+		const start = mapSDKMessageToAgentSignals(
+			makeStreamEvent(SESSION_ID, makeContentBlockStartToolUse(0, 'tu_term', 'mcp__client__runInTerminal')),
+			SESSION,
+			TURN_ID,
+			state,
+			new NullLogService(),
+			resolver,
+			clientTools,
+		);
+		const delta = mapSDKMessageToAgentSignals(
+			makeStreamEvent(SESSION_ID, makeInputJsonDelta(0, '{"command":"python3 app.py","mode":"sync"}')),
+			SESSION,
+			TURN_ID,
+			state,
+			new NullLogService(),
+			resolver,
+		);
+		const ready = mapSDKMessageToAgentSignals(
+			makeStreamEvent(SESSION_ID, makeContentBlockStop(0)),
+			SESSION,
+			TURN_ID,
+			state,
+			new NullLogService(),
+			resolver,
+		);
+
+		assert.deepStrictEqual([...start, ...delta, ...ready], [
+			{
+				kind: 'action',
+				resource: SESSION,
+				action: chatToolCallStart(TURN_ID, 'tu_term', 'runInTerminal', 'runInTerminal', {
+					contributor: { kind: ToolCallContributorKind.Client, clientId: 'client-1' },
+					_meta: terminalMeta,
+				}),
+			},
+			{
+				kind: 'action',
+				resource: SESSION,
+				action: {
+					type: ActionType.ChatToolCallDelta,
+					turnId: TURN_ID,
+					toolCallId: 'tu_term',
+					content: '{"command":"python3 app.py","mode":"sync"}',
+				},
+			},
+			{
+				kind: 'action',
+				resource: SESSION,
+				action: chatToolCallReady(TURN_ID, 'tu_term', 'runInTerminal', {
+					toolInput: '{\n  "command": "python3 app.py",\n  "mode": "sync"\n}',
+					confirmed: ToolCallConfirmationReason.NotNeeded,
+					_meta: terminalMeta,
+				}),
+			},
+		]);
+		assert.strictEqual(JSON.parse((ready[0] as { action: { toolInput: string } }).action.toolInput).command, 'python3 app.py');
+	});
+
 	test('client tools with Claude built-in names preserve client semantics throughout the lifecycle', () => {
 		const state = new ClaudeMapperState();
 		const resolver = r();
