@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type Anthropic from '@anthropic-ai/sdk';
-import type { AccountInfo, AgentInfo, ForkSessionOptions, ForkSessionResult, GetSessionMessagesOptions, McpSdkServerConfigWithInstance, McpServerStatus, ModelInfo, Options, PermissionMode, Query, SDKControlInterruptResponse, SDKMessage, SDKSessionInfo, SDKUserMessage, SdkMcpToolDefinition, SessionMessage, SessionMutationOptions, Settings, SlashCommand, WarmQuery } from '@anthropic-ai/claude-agent-sdk';
+import type { AccountInfo, AgentInfo, ForkSessionOptions, ForkSessionResult, GetSessionMessagesOptions, McpSdkServerConfigWithInstance, McpServerStatus, ModelInfo, Options, PermissionMode, PermissionResult, Query, SDKControlInterruptResponse, SDKMessage, SDKSessionInfo, SDKUserMessage, SdkMcpToolDefinition, SessionMessage, SessionMutationOptions, Settings, SlashCommand, WarmQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { CCAModel } from '@vscode/copilot-api';
 
@@ -7130,7 +7130,7 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 	 * `createSession` does NOT touch state — that's the AgentService
 	 * layer's job, which we don't run here).
 	 */
-	async function materialize(seedConfig?: { permissionMode?: string }, serverToolHost?: IAgentServerToolHost, editorTools = false): Promise<{
+	async function materialize(seedConfig?: { permissionMode?: string }, serverToolHost?: IAgentServerToolHost, editorTools = false, clientTools?: readonly ToolDefinition[]): Promise<{
 		ctx: ITestContext;
 		canUseTool: NonNullable<Options['canUseTool']>;
 		sessionUri: URI;
@@ -7146,6 +7146,9 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		await ctx.agent.authenticate(GITHUB_COPILOT_PROTECTED_RESOURCE.resource, 'tok');
 		const created = await createSession(ctx.agent, { workingDirectories: [URI.file('/work')] });
 		const sessionId = created.sdkSessionId;
+		if (clientTools) {
+			getOrCreateActiveClient(ctx.agent, defaultChatUri(created.session), 'client-1').tools = clientTools;
+		}
 
 		const state = ctx.stateManager.createSession({
 			resource: created.session.toString(),
@@ -7296,15 +7299,28 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		});
 	});
 
-	test('editor tools: startup disables the built-in file and shell tools and serves Edit and Write', async () => {
+	test('editor tools: startup disables the built-in file tools and serves Edit and Write; Bash stays without a terminal tool', async () => {
 		const { ctx } = await materialize(undefined, undefined, true);
 		const options = ctx.sdk.capturedStartupOptions[0];
 		assert.deepStrictEqual({
 			disallowedTools: options?.disallowedTools,
 			hasEditorServer: Object.keys(options?.mcpServers ?? {}).includes('editor'),
 		}, {
-			disallowedTools: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+			disallowedTools: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'],
 			hasEditorServer: true,
+		});
+	});
+
+	test('editor tools: Bash is disabled only when the client publishes the terminal tool', async () => {
+		const terminalTool: ToolDefinition = { name: 'runInTerminal', description: 'Run a command', inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } };
+		const { ctx } = await materialize(undefined, undefined, true, [terminalTool]);
+		const options = ctx.sdk.capturedStartupOptions[0];
+		assert.deepStrictEqual({
+			disallowedTools: options?.disallowedTools,
+			servers: ['client', 'editor'].filter(name => Object.keys(options?.mcpServers ?? {}).includes(name)),
+		}, {
+			disallowedTools: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+			servers: ['client', 'editor'],
 		});
 	});
 
@@ -7344,12 +7360,12 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		});
 	});
 
-	test('editor tools: acceptEdits and bypassPermissions allow without asking', async () => {
+	test('editor tools: acceptEdits and bypassPermissions allow edits in the working directory without asking', async () => {
 		for (const permissionMode of ['acceptEdits', 'bypassPermissions']) {
 			const { ctx, canUseTool } = await materialize({ permissionMode }, undefined, true);
 			const signals: AgentSignal[] = [];
 			disposables.add(ctx.agent.onDidChatProgress(signal => signals.push(signal)));
-			const input = { file_path: '/work/a.ts', content: 'x' };
+			const input = { file_path: '/work/sub/../a.ts', content: 'x' };
 
 			const result = await canUseTool('mcp__editor__Write', input, makeOptions(`tu_${permissionMode}`));
 
@@ -7361,19 +7377,59 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		}
 	});
 
-	test('editor tools: plan mode denies edits in the working directory and allows files outside it', async () => {
-		const { canUseTool } = await materialize({ permissionMode: 'plan' }, undefined, true);
+	test('editor tools: acceptEdits asks for a file outside the working directory, also when spelled through it', async () => {
+		const { ctx, canUseTool } = await materialize({ permissionMode: 'acceptEdits' }, undefined, true);
+		const signals: AgentSignal[] = [];
+		disposables.add(ctx.agent.onDidChatProgress(signal => signals.push(signal)));
+		const inputs = [
+			{ file_path: '/mock-home/.bashrc', content: 'x' },
+			{ file_path: '/work/../mock-home/.bashrc', content: 'x' },
+		];
+
+		const results: (PermissionResult | null)[] = [];
+		for (const [index, input] of inputs.entries()) {
+			const pending = canUseTool('mcp__editor__Write', input, makeOptions(`tu_accept_out_${index}`));
+			await tick();
+			ctx.agent.respondToPermissionRequest(`tu_accept_out_${index}`, false);
+			results.push(await pending);
+		}
+
+		assert.deepStrictEqual({
+			behaviors: results.map(result => result?.behavior),
+			asked: signals.filter(signal => signal.kind === 'pending_confirmation').map(signal => signal.kind === 'pending_confirmation' ? signal.permissionPath : undefined),
+		}, {
+			behaviors: ['deny', 'deny'],
+			asked: ['/mock-home/.bashrc', '/work/../mock-home/.bashrc'],
+		});
+	});
+
+	test('editor tools: plan mode denies edits in the working directory, allows the .claude directory and asks elsewhere', async () => {
+		const { ctx, canUseTool } = await materialize({ permissionMode: 'plan' }, undefined, true);
+		const signals: AgentSignal[] = [];
+		disposables.add(ctx.agent.onDidChatProgress(signal => signals.push(signal)));
 		const inside = { file_path: '/work/a.ts', content: 'x' };
-		const outside = { file_path: '/home/user/.claude/plans/plan.md', content: 'plan' };
+		const insideDotted = { file_path: '/elsewhere/../work/a.ts', content: 'x' };
+		const plan = { file_path: '/mock-home/.claude/plans/plan.md', content: 'plan' };
+		const elsewhere = { file_path: '/elsewhere/notes.md', content: 'x' };
 
 		const results = [
 			await canUseTool('mcp__editor__Write', inside, makeOptions('tu_plan_in')),
-			await canUseTool('mcp__editor__Write', outside, makeOptions('tu_plan_out')),
+			await canUseTool('mcp__editor__Write', insideDotted, makeOptions('tu_plan_in_dotted')),
+			await canUseTool('mcp__editor__Write', plan, makeOptions('tu_plan_file')),
 		];
+		const asked = canUseTool('mcp__editor__Write', elsewhere, makeOptions('tu_plan_elsewhere'));
+		await tick();
+		ctx.agent.respondToPermissionRequest('tu_plan_elsewhere', true);
+		results.push(await asked);
 
-		assert.deepStrictEqual({ insideBehavior: results[0]?.behavior, outside: results[1] }, {
-			insideBehavior: 'deny',
-			outside: { behavior: 'allow', updatedInput: outside },
+		assert.deepStrictEqual({
+			behaviors: results.map(result => result?.behavior),
+			planFile: results[2],
+			askedFor: signals.filter(signal => signal.kind === 'pending_confirmation').map(signal => signal.kind === 'pending_confirmation' ? signal.permissionPath : undefined),
+		}, {
+			behaviors: ['deny', 'deny', 'allow', 'allow'],
+			planFile: { behavior: 'allow', updatedInput: plan },
+			askedFor: ['/elsewhere/notes.md'],
 		});
 	});
 

@@ -62,7 +62,7 @@ export class ClaudeFileEditObserver extends Disposable implements IClaudeEditSna
 	 * per-subagent: when a subagent emits the `tool_use`, its model
 	 * (not the parent's) is what we record.
 	 */
-	private readonly _editToolPaths = new Map<string, { readonly filePath: string; readonly toolName: string; readonly toolInput: unknown; readonly modelId: string | undefined; readonly clientContext?: IAgentHostClientTelemetryContext; readonly chatUri?: string }>();
+	private readonly _editToolPaths = new Map<string, { readonly filePath: string; readonly toolName: string; readonly toolInput: unknown; readonly modelId: string | undefined; readonly clientContext?: IAgentHostClientTelemetryContext; readonly chatUri?: string; /** The tool's handler took both snapshots itself (editor tools). */ readonly selfSnapshotted: boolean }>();
 
 	/** Permission mode of the latest assistant message, recorded with edits the editor tools snapshot. */
 	private _lastMode: PermissionMode | undefined;
@@ -125,8 +125,9 @@ export class ClaudeFileEditObserver extends Disposable implements IClaudeEditSna
 			if (!filePath) {
 				continue;
 			}
-			this._editToolPaths.set(block.id, { filePath, toolName, toolInput: block.input, modelId, clientContext, chatUri });
-			if (isClaudeEditorToolName(block.name)) {
+			const selfSnapshotted = isClaudeEditorToolName(block.name);
+			this._editToolPaths.set(block.id, { filePath, toolName, toolInput: block.input, modelId, clientContext, chatUri, selfSnapshotted });
+			if (selfSnapshotted) {
 				// The tool's handler snapshots the file itself.
 				continue;
 			}
@@ -163,7 +164,12 @@ export class ClaudeFileEditObserver extends Disposable implements IClaudeEditSna
 			}
 			this._editToolPaths.delete(block.tool_use_id);
 			try {
-				await this._editTracker.completeEdit(tracked.filePath, tracked.toolInput);
+				// An editor tool completed its own snapshot in its handler. Completing
+				// it again here would complete whichever edit of the file is pending
+				// instead, such as a later edit of the same file that already started.
+				if (!tracked.selfSnapshotted) {
+					await this._editTracker.completeEdit(tracked.filePath, tracked.toolInput);
+				}
 				const editChatUri = chat?.isSubagent ? chat.uri : tracked.chatUri ?? chat?.uri;
 				const fileEdit = await this._editTracker.takeCompletedEdit(turnId, block.tool_use_id, tracked.filePath, tracked.toolName, tracked.toolInput, tracked.modelId, chat?.isSubagent ?? false, tracked.clientContext, editChatUri);
 				if (fileEdit) {

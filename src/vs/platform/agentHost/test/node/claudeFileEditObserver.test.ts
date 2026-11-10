@@ -213,6 +213,37 @@ suite('ClaudeFileEditObserver', () => {
 		});
 	});
 
+	test('editor tools: a later edit of the same file that started before the first result arrived keeps its own snapshots', async () => {
+		const bridge = new ClaudeEditSnapshotBridge();
+		const { observer, fileService, mapperState, db } = createObserver(disposables, undefined, bridge);
+		const file = URI.file('/work/twice.txt');
+		await fileService.writeFile(file, VSBuffer.fromString('v0'));
+		const inputA = { file_path: file.fsPath, old_string: 'v0', new_string: 'v1' };
+		const inputB = { file_path: file.fsPath, old_string: 'v1', new_string: 'v2' };
+
+		observer.observeAssistant(assistantMessage([
+			{ type: 'tool_use', id: 'tu-a', name: 'mcp__editor__Edit', input: inputA },
+			{ type: 'tool_use', id: 'tu-b', name: 'mcp__editor__Edit', input: inputB },
+		]));
+		// A runs to completion, then B starts before A's tool_result is observed.
+		await bridge.beforeEdit(file.fsPath, inputA);
+		await fileService.writeFile(file, VSBuffer.fromString('v1'));
+		await bridge.afterEdit(file.fsPath, inputA);
+		await bridge.beforeEdit(file.fsPath, inputB);
+		await observer.observeUser(userMessage([{ type: 'tool_result', tool_use_id: 'tu-a', content: 'ok' }]), 'turn-1', mapperState);
+		await fileService.writeFile(file, VSBuffer.fromString('v2'));
+		await bridge.afterEdit(file.fsPath, inputB);
+		await observer.observeUser(userMessage([{ type: 'tool_result', tool_use_id: 'tu-b', content: 'ok' }]), 'turn-1', mapperState);
+
+		const decoder = new TextDecoder();
+		const edits = await Promise.all(['tu-a', 'tu-b'].map(async id => {
+			const cached = mapperState.takeFileEdit(id)?.type === ToolResultContentType.FileEdit;
+			const content = await db.readFileEditContent(id, file.fsPath);
+			return { cached, recorded: content ? `${decoder.decode(content.beforeContent)} -> ${decoder.decode(content.afterContent)}` : 'not recorded' };
+		}));
+		assert.deepStrictEqual(edits, [{ cached: true, recorded: 'v0 -> v1' }, { cached: true, recorded: 'v1 -> v2' }]);
+	});
+
 	test('editor tools: a write outside any snapshot caches no edit', async () => {
 		const bridge = new ClaudeEditSnapshotBridge();
 		const { observer, fileService, mapperState } = createObserver(disposables, undefined, bridge);

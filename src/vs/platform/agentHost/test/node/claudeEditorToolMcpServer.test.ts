@@ -21,6 +21,7 @@ import {
 	isClaudeEditorToolName,
 	normalizeClaudeToolName,
 	resolveClaudeEditorPath,
+	resolveClaudeEditorPathOnDisk,
 	type IClaudeEditSnapshotter,
 } from '../../node/claude/claudeEditorToolMcpServer.js';
 
@@ -57,7 +58,7 @@ suite('claudeEditorToolMcpServer', () => {
 		toolNames: string[];
 	}
 
-	async function setup(snapshotterFails = false): Promise<IHarness> {
+	async function setup(snapshotterFails = false, onBeforeEdit?: (path: string) => Promise<void>): Promise<IHarness> {
 		const fileService = createInMemoryFileService(disposables, Schemas.file);
 		const events: string[] = [];
 		const read = async (path: string) => (await fileService.readFile(URI.file(path))).value.toString();
@@ -67,13 +68,14 @@ suite('claudeEditorToolMcpServer', () => {
 				if (snapshotterFails) {
 					throw new Error('snapshot failed');
 				}
+				await onBeforeEdit?.(path);
 			},
 			afterEdit: async (path, input) => {
 				events.push(`after:${path}:${await read(path)}:${JSON.stringify(input)}`);
 			},
 		};
 		const { sdk, handlers, serverNames } = makeSdk();
-		const server = await buildEditorToolMcpServer(sdk, fileService, new NullLogService(), () => [root], snapshotter);
+		const server = await buildEditorToolMcpServer(sdk, fileService, new NullLogService(), filePath => resolveClaudeEditorPathOnDisk(filePath, [root], fileService), snapshotter);
 		assert.strictEqual((server as unknown as { name: string }).name, CLAUDE_EDITOR_TOOL_MCP_SERVER_NAME);
 		return {
 			fileService,
@@ -212,18 +214,72 @@ suite('claudeEditorToolMcpServer', () => {
 		});
 	});
 
-	test('resolveClaudeEditorPath resolves relative paths and tells workspace files apart', () => {
+	test('resolveClaudeEditorPath resolves relative paths, folds dot segments and tells workspace files apart', () => {
 		assert.deepStrictEqual([
 			resolveClaudeEditorPath('src/a.ts', [root]),
 			resolveClaudeEditorPath('/work/b.ts', [root]),
 			resolveClaudeEditorPath('/workshop/b.ts', [root]),
 			resolveClaudeEditorPath('/extra/c.ts', [root, URI.file('/extra')]),
+			resolveClaudeEditorPath('/work/../etc/passwd', [root]),
+			resolveClaudeEditorPath('/etc/../work/./sub/../a.ts', [root]),
+			resolveClaudeEditorPath('../outside.ts', [root]),
 		], [
 			{ path: '/work/src/a.ts', inWorkspace: true },
 			{ path: '/work/b.ts', inWorkspace: true },
 			{ path: '/workshop/b.ts', inWorkspace: false },
 			{ path: '/extra/c.ts', inWorkspace: true },
+			{ path: '/etc/passwd', inWorkspace: false },
+			{ path: '/work/a.ts', inWorkspace: true },
+			{ path: '/outside.ts', inWorkspace: false },
 		]);
+	});
+
+	test('resolveClaudeEditorPathOnDisk follows links into the workspace, also for files that do not exist yet', async () => {
+		const links: Record<string, string> = { '/link/a.ts': '/work/a.ts', '/link': '/work', '/work': '/work', '/elsewhere/b.ts': '/elsewhere/b.ts' };
+		const fileService = {
+			realpath: async (resource: URI) => {
+				const real = links[resource.fsPath];
+				return real ? URI.file(real) : undefined;
+			},
+		} as unknown as IFileService;
+		assert.deepStrictEqual([
+			await resolveClaudeEditorPathOnDisk('/link/a.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/link/new/c.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/elsewhere/b.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/nowhere/d.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/work/e.ts', [root], fileService),
+		], [
+			{ path: '/work/a.ts', inWorkspace: true },
+			{ path: '/work/new/c.ts', inWorkspace: true },
+			{ path: '/elsewhere/b.ts', inWorkspace: false },
+			{ path: '/nowhere/d.ts', inWorkspace: false },
+			{ path: '/work/e.ts', inWorkspace: true },
+		]);
+	});
+
+	test('Edit refuses to overwrite a file that changed after it was read', async () => {
+		const h = await setup(false, async path => {
+			// A later mtime, as on disk: the in-memory provider stamps Date.now().
+			await new Promise(resolve => setTimeout(resolve, 5));
+			await h.fileService.writeFile(URI.file(path), VSBuffer.fromString('changed meanwhile!'));
+		});
+		await h.fileService.writeFile(URI.file('/work/a.txt'), VSBuffer.fromString('abc'));
+		const result = await h.call('Edit', { file_path: '/work/a.txt', old_string: 'b', new_string: 'B' });
+		assert.deepStrictEqual({ isError: result.isError, mentionsChange: text(result).includes('changed since'), content: await h.read('/work/a.txt') }, { isError: true, mentionsChange: true, content: 'changed meanwhile!' });
+	});
+
+	test('Edit matches old_string with CRLF line endings when the file uses them', async () => {
+		const h = await setup();
+		await h.fileService.writeFile(URI.file('/work/a.txt'), VSBuffer.fromString('one\r\ntwo\r\nthree\r\n'));
+		const result = await h.call('Edit', { file_path: '/work/a.txt', old_string: 'two\nthree', new_string: 'TWO\nTHREE\nmore' });
+		assert.deepStrictEqual({ isError: result.isError, content: await h.read('/work/a.txt') }, { isError: undefined, content: 'one\r\nTWO\r\nTHREE\r\nmore\r\n' });
+	});
+
+	test('Edit folds dot segments so a path spelled through the workspace is not snapshotted', async () => {
+		const h = await setup();
+		await h.fileService.writeFile(URI.file('/outside/a.txt'), VSBuffer.fromString('abc'));
+		const result = await h.call('Edit', { file_path: '/work/../outside/a.txt', old_string: 'b', new_string: 'B' });
+		assert.deepStrictEqual({ isError: result.isError, content: await h.read('/outside/a.txt'), events: h.events }, { isError: undefined, content: 'aBc', events: [] });
 	});
 
 	test('the bridge forwards to the attached target and is a no-op otherwise', async () => {

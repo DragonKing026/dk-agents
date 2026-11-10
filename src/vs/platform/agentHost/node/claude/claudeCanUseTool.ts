@@ -15,8 +15,10 @@ import { ClaudeAgentSession } from './claudeAgentSession.js';
 import { extractServerToolName } from './claudeServerToolMcpServer.js';
 import { buildAskUserSessionInputQuestions, buildExitPlanModeConfirmationState, flattenAskUserAnswers, parseAskUserQuestionInput } from './claudeInteractiveTools.js';
 import { CLAUDE_PLAN_DECLINED_MESSAGE, CLAUDE_PLAN_MODE_EDIT_MESSAGE, CLAUDE_QUESTION_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
-import { claudeConfigTarget, readClaudePermissionMode } from './claudeSessionPermissionMode.js';
-import { isClaudeEditorToolName, normalizeClaudeToolName, resolveClaudeEditorPath } from './claudeEditorToolMcpServer.js';
+import { claudeConfigTarget } from './claudeSessionPermissionMode.js';
+import { isClaudeEditorToolName, normalizeClaudeToolName } from './claudeEditorToolMcpServer.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
 import { getClaudeConfirmationTitle, getClaudeInvocationMessage, getClaudePermissionKind, getClaudeToolDisplayName, getClaudeToolInputString, getClaudeToolPath, INTERACTIVE_CLAUDE_TOOLS, buildClaudeToolMeta } from './claudeToolDisplay.js';
 
 /**
@@ -150,7 +152,7 @@ async function dispatchCanUseTool(
 	}
 
 	if (isClaudeEditorToolName(sdkToolName)) {
-		const decision = decideEditorToolPermission(deps, session, toolName, input);
+		const decision = await decideEditorToolPermission(deps, session, toolName, input);
 		if (decision) {
 			return decision;
 		}
@@ -194,29 +196,43 @@ async function dispatchCanUseTool(
 /**
  * The CLI applies the session's permission mode to its built-in file tools
  * itself, but not to MCP tools, so the host reproduces that for the editor
- * tools: `acceptEdits` and `bypassPermissions` allow without asking, and
- * `plan` refuses to modify files in the working directories while still
- * allowing the plan file the CLI writes elsewhere. Returns `undefined` when the
- * user has to be asked.
+ * tools, by the file's real location (links and `..` folded):
+ * - `bypassPermissions` allows everything without asking;
+ * - `acceptEdits` allows edits inside the working directories without asking
+ *   and asks for any other file, as the CLI does;
+ * - `plan` refuses to modify files in the working directories, allows the
+ *   plan file the CLI keeps under the user's `.claude` directory, and asks
+ *   for anything else.
+ * Returns `undefined` when the user has to be asked.
  */
-function decideEditorToolPermission(
+async function decideEditorToolPermission(
 	deps: IClaudeCanUseToolDeps,
 	session: ClaudeAgentSession,
 	toolName: string,
 	input: Record<string, unknown>,
-): PermissionResult | undefined {
-	const mode = readClaudePermissionMode(deps.configurationService, deps.owner.get(), session.chatChannelUri) ?? 'default';
-	if (mode === 'plan') {
-		const filePath = getClaudeToolPath(toolName, input);
-		const inWorkspace = filePath !== undefined && resolveClaudeEditorPath(filePath, session.workingDirectories ?? []).inWorkspace;
-		return inWorkspace
-			? { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE }
-			: { behavior: 'allow', updatedInput: input };
-	}
-	if (mode === 'acceptEdits' || mode === 'bypassPermissions') {
+): Promise<PermissionResult | undefined> {
+	const mode = session.getPermissionMode(deps.owner.get());
+	if (mode === 'bypassPermissions') {
 		return { behavior: 'allow', updatedInput: input };
 	}
-	return undefined;
+	if (mode !== 'acceptEdits' && mode !== 'plan') {
+		return undefined;
+	}
+	const filePath = getClaudeToolPath(toolName, input);
+	const target = filePath !== undefined ? await session.resolveEditorToolPath(filePath) : undefined;
+	if (mode === 'acceptEdits') {
+		return target?.inWorkspace ? { behavior: 'allow', updatedInput: input } : undefined;
+	}
+	if (!target) {
+		return undefined;
+	}
+	if (target.inWorkspace) {
+		return { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE };
+	}
+	const claudeHome = URI.joinPath(session.userHome, '.claude');
+	return extUriBiasedIgnorePathCase.isEqualOrParent(URI.file(target.path), claudeHome)
+		? { behavior: 'allow', updatedInput: input }
+		: undefined;
 }
 
 /**

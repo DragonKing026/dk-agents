@@ -285,9 +285,20 @@ suite('claudeSdkOptions / buildOptions plugins projection', () => {
 		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch']);
 	});
 
-	test('editorTools additionally disallows the built-in file-writing and shell tools', async () => {
+	test('editorTools additionally disallows the built-in file-writing tools', async () => {
 		const opts = await buildOptions({ ...input(undefined), editorTools: true }, proxyTransport, () => { });
-		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']);
+		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+	});
+
+	test('editorTerminal disallows Bash only together with editorTools', async () => {
+		const [both, terminalOnly] = await Promise.all([
+			buildOptions({ ...input(undefined), editorTools: true, editorTerminal: true }, proxyTransport, () => { }),
+			buildOptions({ ...input(undefined), editorTools: false, editorTerminal: true }, proxyTransport, () => { }),
+		]);
+		assert.deepStrictEqual([both.disallowedTools, terminalOnly.disallowedTools], [
+			['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+			['WebSearch'],
+		]);
 	});
 
 	test('editorTools false keeps the default disallowed tools', async () => {

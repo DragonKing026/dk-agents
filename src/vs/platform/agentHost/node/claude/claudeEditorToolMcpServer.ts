@@ -5,10 +5,10 @@
 
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { VSBuffer } from '../../../../base/common/buffer.js';
-import { dirname, isAbsolute, resolve } from '../../../../base/common/path.js';
+import { basename, dirname, isAbsolute, join, normalize, resolve } from '../../../../base/common/path.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IFileService } from '../../../files/common/files.js';
+import { FileOperationError, FileOperationResult, IFileService } from '../../../files/common/files.js';
 import type { ILogService } from '../../../log/common/log.js';
 import type { ToolDefinition } from '../../common/state/protocol/state.js';
 import type { IClaudeAgentSdkService } from './claudeAgentSdkService.js';
@@ -40,15 +40,74 @@ export function normalizeClaudeToolName(toolName: string): string {
 	return isClaudeEditorToolName(toolName) ? toolName.slice(EDITOR_TOOL_PREFIX.length) : toolName;
 }
 
+/** Where a tool's `file_path` points, and whether that is inside the session's working directories. */
+export interface IResolvedClaudeEditorPath {
+	/** Absolute, normalized path the tool reads and writes. */
+	readonly path: string;
+	/** Whether the file lies inside one of the working directories. Only such files are snapshotted for review. */
+	readonly inWorkspace: boolean;
+}
+
 /**
- * Resolves a tool's `file_path` to an absolute path (relative ones against the
- * first working directory) and tells whether it lies inside any of the
- * session's working directories. Only such files are snapshotted for review.
+ * Resolves a tool's `file_path` lexically: relative paths are taken against
+ * the first working directory, and `.` and `..` segments are folded, so a
+ * path cannot step out of (or into) a working directory by spelling. Symbolic
+ * links are not followed; see {@link resolveClaudeEditorPathOnDisk}.
  */
-export function resolveClaudeEditorPath(filePath: string, workingDirectories: readonly URI[]): { readonly path: string; readonly inWorkspace: boolean } {
-	const path = isAbsolute(filePath) || workingDirectories.length === 0 ? filePath : resolve(workingDirectories[0].fsPath, filePath);
+export function resolveClaudeEditorPath(filePath: string, workingDirectories: readonly URI[]): IResolvedClaudeEditorPath {
+	const path = isAbsolute(filePath)
+		? resolve(filePath)
+		: workingDirectories.length ? resolve(workingDirectories[0].fsPath, filePath) : normalize(filePath);
+	return { path, inWorkspace: isInsideAny(path, workingDirectories) };
+}
+
+/**
+ * Like {@link resolveClaudeEditorPath}, but also follows symbolic links (of the
+ * file, or of its closest existing ancestor when the file does not exist yet),
+ * so a link from outside the working directories to a file inside them counts
+ * as inside, and the snapshot is taken of the real file. Working directories
+ * that are links themselves are compared by their real path too. When the
+ * real path cannot be determined, the lexical resolution stands.
+ */
+export async function resolveClaudeEditorPathOnDisk(filePath: string, workingDirectories: readonly URI[], fileService: IFileService): Promise<IResolvedClaudeEditorPath> {
+	const lexical = resolveClaudeEditorPath(filePath, workingDirectories);
+	if (lexical.inWorkspace) {
+		return lexical;
+	}
+	const real = await realpathOfClosestExisting(lexical.path, fileService);
+	if (real === undefined || real === lexical.path) {
+		return lexical;
+	}
+	const realDirectories = await Promise.all(workingDirectories.map(directory => fileService.realpath(directory).then(uri => uri ?? directory, () => directory)));
+	const inWorkspace = isInsideAny(real, workingDirectories) || isInsideAny(real, realDirectories);
+	return { path: inWorkspace ? real : lexical.path, inWorkspace };
+}
+
+function isInsideAny(path: string, directories: readonly URI[]): boolean {
 	const resource = URI.file(path);
-	return { path, inWorkspace: workingDirectories.some(directory => extUriBiasedIgnorePathCase.isEqualOrParent(resource, directory)) };
+	return directories.some(directory => extUriBiasedIgnorePathCase.isEqualOrParent(resource, directory));
+}
+
+/** Real path of `path`, or of its closest existing ancestor with the remaining segments appended; `undefined` when none resolves. */
+async function realpathOfClosestExisting(path: string, fileService: IFileService): Promise<string | undefined> {
+	let current = path;
+	const tail: string[] = [];
+	for (; ;) {
+		try {
+			const real = await fileService.realpath(URI.file(current));
+			if (real) {
+				return tail.length ? join(real.fsPath, ...tail.reverse()) : real.fsPath;
+			}
+		} catch {
+			// Not resolvable at this level: try the parent.
+		}
+		const parent = dirname(current);
+		if (parent === current) {
+			return undefined;
+		}
+		tail.push(basename(current));
+		current = parent;
+	}
 }
 
 /**
@@ -149,47 +208,60 @@ function countOccurrences(haystack: string, needle: string): number {
 	return count;
 }
 
+/** `text` with every line break as CRLF. */
+function toCrlf(text: string): string {
+	return text.replace(/\r?\n/g, '\r\n');
+}
+
 /**
  * Build the per-session in-process MCP server that serves `Edit` and `Write`.
  *
- * A write inside one of the session's working directories is bracketed by the
- * snapshotter (`beforeEdit` before the bytes hit the disk, `afterEdit` once
+ * `resolveTarget` turns a tool's `file_path` into the path to write and
+ * whether it is inside the session's working directories (see
+ * {@link resolveClaudeEditorPathOnDisk}). A write inside them is bracketed by
+ * the snapshotter (`beforeEdit` before the bytes hit the disk, `afterEdit` once
  * they are there) so the review and checkpoints see exactly that change. A
  * write outside them, such as a plan file under the user's home, is written
- * without a snapshot. A failure (missing file, ambiguous match, I/O error)
- * degrades to an `isError` result rather than rejecting.
+ * without a snapshot. A failure (missing file, ambiguous match, file changed
+ * since it was read, I/O error) degrades to an `isError` result rather than
+ * rejecting; a snapshot left open by a failed write is released when the
+ * tool's result reaches the file-edit observer.
  *
- * `getWorkingDirectories` is read per call because a session's directories can
- * change; its first entry also resolves relative paths.
+ * `Edit` writes with the etag of the content it read, so a file the user or
+ * another tool changed in between is not blindly overwritten. When the file
+ * uses CRLF line endings and `old_string` is not found as given, the match is
+ * retried with CRLF line endings in both `old_string` and `new_string`.
  */
 export async function buildEditorToolMcpServer(
 	sdk: IClaudeAgentSdkService,
 	fileService: IFileService,
 	logService: ILogService,
-	getWorkingDirectories: () => readonly URI[],
+	resolveTarget: (filePath: string) => Promise<IResolvedClaudeEditorPath>,
 	snapshotter: IClaudeEditSnapshotter,
 ): Promise<McpSdkServerConfigWithInstance> {
 
-	const resolveTarget = (filePath: string): { readonly path: string; readonly tracked: boolean } => {
-		const { path, inWorkspace } = resolveClaudeEditorPath(filePath, getWorkingDirectories());
-		return { path, tracked: inWorkspace };
-	};
-
-	const writeTracked = async (filePath: string, toolInput: unknown, content: string): Promise<void> => {
-		const { path, tracked } = resolveTarget(filePath);
-		if (tracked) {
+	/** `expected` is the etag and mtime of the content the tool read; a file that changed since is not overwritten. */
+	const writeTracked = async (target: IResolvedClaudeEditorPath, toolInput: unknown, content: string, expected?: { readonly etag: string; readonly mtime: number }): Promise<void> => {
+		if (target.inWorkspace) {
 			try {
-				await snapshotter.beforeEdit(path, toolInput);
+				await snapshotter.beforeEdit(target.path, toolInput);
 			} catch (error) {
-				logService.warn(`[ClaudeEditorTools] Snapshot before editing ${path} failed: ${error}`);
+				logService.warn(`[ClaudeEditorTools] Snapshot before editing ${target.path} failed: ${error}`);
 			}
 		}
-		await fileService.writeFile(URI.file(path), VSBuffer.fromString(content));
-		if (tracked) {
+		try {
+			await fileService.writeFile(URI.file(target.path), VSBuffer.fromString(content), expected);
+		} catch (error) {
+			if (error instanceof FileOperationError && error.fileOperationResult === FileOperationResult.FILE_MODIFIED_SINCE) {
+				throw new Error(`${target.path} changed since it was read. Read it again and retry the edit.`);
+			}
+			throw error;
+		}
+		if (target.inWorkspace) {
 			try {
-				await snapshotter.afterEdit(path, toolInput);
+				await snapshotter.afterEdit(target.path, toolInput);
 			} catch (error) {
-				logService.warn(`[ClaudeEditorTools] Snapshot after editing ${path} failed: ${error}`);
+				logService.warn(`[ClaudeEditorTools] Snapshot after editing ${target.path} failed: ${error}`);
 			}
 		}
 	};
@@ -203,33 +275,43 @@ export async function buildEditorToolMcpServer(
 			if (oldString === '') {
 				return errorResult('old_string must not be empty. Use Write to create a file or replace its whole content.');
 			}
-			const { path } = resolveTarget(filePath);
-			let original: string;
+			const target = await resolveTarget(filePath);
+			let content;
 			try {
-				original = (await fileService.readFile(URI.file(path))).value.toString();
+				content = await fileService.readFile(URI.file(target.path));
 			} catch {
-				return errorResult(`File not found or not readable: ${path}`);
+				return errorResult(`File not found or not readable: ${target.path}`);
 			}
-			const occurrences = countOccurrences(original, oldString);
+			const original = content.value.toString();
+			let needle = oldString;
+			let replacement = newString;
+			let occurrences = countOccurrences(original, needle);
+			if (occurrences === 0 && original.includes('\r\n') && !needle.includes('\r')) {
+				needle = toCrlf(oldString);
+				replacement = toCrlf(newString);
+				occurrences = countOccurrences(original, needle);
+			}
 			if (occurrences === 0) {
-				return errorResult(`old_string was not found in ${path}.`);
+				return errorResult(`old_string was not found in ${target.path}.`);
 			}
 			if (occurrences > 1 && !replaceAll) {
-				return errorResult(`old_string occurs ${occurrences} times in ${path}. Add surrounding context to make it unique, or set replace_all to replace every occurrence.`);
+				return errorResult(`old_string occurs ${occurrences} times in ${target.path}. Add surrounding context to make it unique, or set replace_all to replace every occurrence.`);
 			}
-			const updated = original.split(oldString).join(newString);
-			await writeTracked(filePath, args, updated);
+			const updated = original.split(needle).join(replacement);
+			await writeTracked(target, args, updated, { etag: content.etag, mtime: content.mtime });
 			return textResult(occurrences > 1
-				? `Replaced ${occurrences} occurrences in ${path}.`
-				: `Edited ${path}.`);
+				? `Replaced ${occurrences} occurrences in ${target.path}.`
+				: `Edited ${target.path}.`);
 		},
 		Write: async args => {
 			const { file_path: filePath, content } = args as { file_path: string; content: string };
-			const { path } = resolveTarget(filePath);
-			const existed = await fileService.exists(URI.file(path));
-			await fileService.createFolder(URI.file(dirname(path)));
-			await writeTracked(filePath, args, content);
-			return textResult(existed ? `Updated ${path}.` : `Created ${path}.`);
+			const target = await resolveTarget(filePath);
+			const existed = await fileService.exists(URI.file(target.path));
+			// The parent directory is created before the snapshot, so a failed
+			// write of a new file leaves an empty directory behind at worst.
+			await fileService.createFolder(URI.file(dirname(target.path)));
+			await writeTracked(target, args, content);
+			return textResult(existed ? `Updated ${target.path}.` : `Created ${target.path}.`);
 		},
 	};
 

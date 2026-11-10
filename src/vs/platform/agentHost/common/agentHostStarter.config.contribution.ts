@@ -328,7 +328,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[AgentHostClaudeEditorToolsEnabledSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.agentHost.claudeEditorTools.enabled', "When enabled, Claude sessions edit files through the editor's own Edit and Write tools and run commands in the editor terminal, instead of the built-in Edit, Write and Bash tools. Changes take effect for new sessions."),
+			description: nls.localize('chat.agentHost.claudeEditorTools.enabled', "When enabled, Claude sessions edit files through the editor's own Edit and Write tools instead of the built-in ones, so that every change is reviewed and checkpointed, and run commands in the editor terminal instead of the built-in Bash tool whenever the terminal tools are available. Changes take effect for new sessions."),
 			default: true,
 			tags: ['experimental', 'advanced'],
 			agentHost: { key: AgentHostClaudeEditorToolsEnabledConfigKey },

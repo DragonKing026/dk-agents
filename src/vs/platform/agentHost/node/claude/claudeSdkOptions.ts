@@ -25,8 +25,10 @@ import type { IMcpServerDefinition } from '../../../agentPlugins/common/pluginPa
 import { isEqual } from '../../../../base/common/resources.js';
 import { resolveMcpServerWorkingDirectory } from '../shared/mcpServerWorkingDirectory.js';
 
-/** Built-in tools turned off when the session uses the editor-backed tools. */
-export const CLAUDE_EDITOR_TOOLS_DISALLOWED: readonly string[] = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'];
+/** Built-in file-writing tools turned off when the session serves `Edit` and `Write` from the `editor` MCP server. */
+export const CLAUDE_EDITOR_FILE_TOOLS_DISALLOWED: readonly string[] = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
+/** Built-in shell tool turned off when the session runs commands through the workbench terminal tools. */
+export const CLAUDE_EDITOR_SHELL_TOOLS_DISALLOWED: readonly string[] = ['Bash'];
 
 type ClaudeSdkDeniedMcpServerSpec = NonNullable<Settings['deniedMcpServers']>[number];
 
@@ -82,12 +84,18 @@ export interface IBuildOptionsInput {
 	 */
 	readonly allowedTools?: readonly string[];
 	/**
-	 * When `true`, the CLI's own file-writing and shell tools are disabled
-	 * ({@link CLAUDE_EDITOR_TOOLS_DISALLOWED}) because the session serves
-	 * `Edit` and `Write` from the in-process `editor` MCP server and the
-	 * workbench terminal tools instead.
+	 * When `true`, the CLI's own file-writing tools are disabled
+	 * ({@link CLAUDE_EDITOR_FILE_TOOLS_DISALLOWED}) because the session serves
+	 * `Edit` and `Write` from the in-process `editor` MCP server instead.
 	 */
 	readonly editorTools?: boolean;
+	/**
+	 * When `true` together with {@link editorTools}, the CLI's own shell tool
+	 * is disabled too ({@link CLAUDE_EDITOR_SHELL_TOOLS_DISALLOWED}) because the
+	 * workbench publishes its terminal tools to the session. Left off when no
+	 * terminal tool is available, so the session is never without a shell.
+	 */
+	readonly editorTerminal?: boolean;
 	/**
 	 * Local plugin directories to load at SDK startup. Projected onto
 	 * `Options.plugins` as `{ type: 'local', path }`. Omitted from the
@@ -190,7 +198,11 @@ export async function buildOptions(
 		allowDangerouslySkipPermissions: true,
 		canUseTool: input.canUseTool,
 		onElicitation: input.onElicitation,
-		disallowedTools: input.editorTools ? ['WebSearch', ...CLAUDE_EDITOR_TOOLS_DISALLOWED] : ['WebSearch'],
+		disallowedTools: [
+			'WebSearch',
+			...(input.editorTools ? CLAUDE_EDITOR_FILE_TOOLS_DISALLOWED : []),
+			...(input.editorTools && input.editorTerminal ? CLAUDE_EDITOR_SHELL_TOOLS_DISALLOWED : []),
+		],
 		includePartialMessages: true,
 		forwardSubagentText: true,
 		enableFileCheckpointing: true,
