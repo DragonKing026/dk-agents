@@ -85,6 +85,31 @@ suite('ExtHostChatAgents2', function () {
 		});
 	}
 
+	for (const enablePrivateApi of [false, true]) {
+		test(`exposes the selected model id in chat history only with the private API (${enablePrivateApi})`, async () => {
+			const { agents, participant, handle } = createParticipant(false, enablePrivateApi);
+			let modelIds: (string | undefined)[] | undefined;
+			participant.followupProvider = {
+				provideFollowups(_result, context) {
+					modelIds = context.history.filter((turn): turn is ChatRequestTurn => turn instanceof ChatRequestTurn).map(turn => turn.modelId);
+					return [];
+				},
+			};
+			const request: IChatAgentRequest = {
+				sessionResource: URI.parse('chat-session:/test'), requestId: 'task', agentId: 'test.participant',
+				message: 'task', variables: { variables: [] }, location: ChatAgentLocation.Chat,
+				userSelectedModelId: 'ollama/gpt-oss:20b',
+			};
+			await agents.$provideFollowups(request, handle, {}, {
+				history: [
+					{ request, response: [], result: {} },
+					{ request: { ...request, requestId: 'other', userSelectedModelId: undefined }, response: [], result: {} },
+				],
+			}, CancellationToken.None);
+			assert.deepStrictEqual(modelIds, [enablePrivateApi ? 'ollama/gpt-oss:20b' : undefined, undefined]);
+		});
+	}
+
 	for (const dynamic of [false, true]) {
 		test(`does not invoke disposed ${dynamic ? 'dynamic' : 'static'} participants`, async () => {
 			const { agents, participant, handle } = createParticipant(dynamic);
