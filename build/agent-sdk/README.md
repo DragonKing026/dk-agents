@@ -8,7 +8,7 @@ The runtime side (`src/vs/platform/agentHost/`) downloads and caches the SDK tar
 
 A platform packaging job runs the producer (`produce.ts`) before the existing `gulp vscode-<platform>-<arch>-min-ci` step on the same machine.
 
-The template runs `node build/agent-sdk/produce.ts --vscode-platform=<x>
+The producer runs `node build/agent-sdk/produce.ts --vscode-platform=<x>
 --arch=$(VSCODE_ARCH)`, which iterates the SDKs (`SDKS = ['claude',
 'codex']`), figures out the matching `sdkTarget` for `(vscode-platform,
 arch, sdk)` via `getSdkTargetForBuild`, runs `buildOne` for each in parallel, and drops the tarballs in `$(Build.SourcesDirectory)/.build/agent-sdk/tarballs/`.
