@@ -8,9 +8,35 @@ import fs from 'fs';
 /**
  * Returns the sha1 commit version of a repository or undefined in case of failure.
  */
+/**
+ * Resolves the git directory of `repo`. In a linked worktree `.git` is a file
+ * pointing at the worktree's private git directory (`gitdir: <path>`), whose
+ * `commondir` names the shared one that holds the refs.
+ */
+function getGitDirs(repo: string): { gitDir: string; commonDir: string } {
+	let gitDir = path.join(repo, '.git');
+	try {
+		if (fs.statSync(gitDir).isFile()) {
+			const match = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(gitDir, 'utf8'));
+			if (match) {
+				gitDir = path.resolve(repo, match[1].trim());
+			}
+		}
+	} catch (e) {
+		// noop
+	}
+	let commonDir = gitDir;
+	try {
+		commonDir = path.resolve(gitDir, fs.readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim());
+	} catch (e) {
+		// noop
+	}
+	return { gitDir, commonDir };
+}
+
 export function getVersion(repo: string): string | undefined {
-	const git = path.join(repo, '.git');
-	const headPath = path.join(git, 'HEAD');
+	const { gitDir, commonDir: git } = getGitDirs(repo);
+	const headPath = path.join(gitDir, 'HEAD');
 	let head: string;
 
 	try {
