@@ -565,7 +565,10 @@ suite('ClaudeCliSdkService', () => {
 
 		test('mcp_message serves tools of an in-process server', async () => {
 			const service = createService();
-			const echo = await service.tool('echo', 'Echo the text', { text: z.string() }, async args => ({ content: [{ type: 'text', text: `echo:${args.text}` }] }));
+			const echo = await service.tool('echo', 'Echo the text', { text: z.string() }, async (args, extra) => {
+				const meta = (extra as { _meta?: Record<string, unknown> })._meta;
+				return { content: [{ type: 'text', text: `echo:${args.text}` }], ...(meta ? { _meta: meta } : {}) };
+			});
 			const server = await service.createSdkMcpServer({ name: 'client', tools: [echo] });
 			const query = await service.query({ prompt: openPrompt(), options: { mcpServers: { client: server } } });
 			const claude = processes[0];
@@ -593,6 +596,10 @@ suite('ClaudeCliSdkService', () => {
 
 			const missing = await ask('m5', { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'nope' } });
 			assert.strictEqual(missing.error.code, -32602);
+
+			// The request's `_meta` (where the CLI puts the tool_use_id) reaches the handler as `extra._meta`.
+			const withMeta = await ask('m7', { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'echo', arguments: { text: 'm' }, _meta: { 'claudecode/toolUseId': 'toolu_7' } } });
+			assert.deepStrictEqual(withMeta.result, { content: [{ type: 'text', text: 'echo:m' }], _meta: { 'claudecode/toolUseId': 'toolu_7' } });
 
 			const notification = await ask('m6', { jsonrpc: '2.0', method: 'notifications/initialized' });
 			assert.deepStrictEqual(notification, { jsonrpc: '2.0', result: {}, id: 0 });

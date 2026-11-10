@@ -100,7 +100,7 @@ export class ClaudeCliMcpServer {
 	}
 
 	private async _callTool(id: string | number, params: unknown, signal: AbortSignal): Promise<JsonRpcResponse> {
-		const { name, arguments: rawArguments } = (params ?? {}) as { name?: unknown; arguments?: unknown };
+		const { name, arguments: rawArguments, _meta } = (params ?? {}) as { name?: unknown; arguments?: unknown; _meta?: unknown };
 		const definition = typeof name === 'string' ? this._tools.get(name) : undefined;
 		if (!definition) {
 			return { jsonrpc: '2.0', id, error: { code: InvalidParams, message: `Unknown tool: ${String(name)}` } };
@@ -111,7 +111,12 @@ export class ClaudeCliMcpServer {
 			return { jsonrpc: '2.0', id, result };
 		}
 		try {
-			const result = await definition.handler(parsed.data, { signal });
+			// The request's `_meta` reaches the handler as `extra._meta`, like the
+			// MCP SDK does: the CLI puts the originating `tool_use_id` there
+			// (`claudecode/toolUseId`), which the client tools need to pair the
+			// call with the workbench's completion.
+			const extra = { signal, requestId: id, ...(_meta && typeof _meta === 'object' ? { _meta } : {}) };
+			const result = await definition.handler(parsed.data, extra);
 			return { jsonrpc: '2.0', id, result };
 		} catch (error) {
 			const result: CallToolResult = { content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }], isError: true };
