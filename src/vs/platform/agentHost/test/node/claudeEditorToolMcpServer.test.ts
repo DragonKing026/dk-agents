@@ -145,6 +145,14 @@ suite('claudeEditorToolMcpServer', () => {
 		assert.deepStrictEqual({ isError: result.isError, content: await h.read('/work/a.txt'), snapshots: h.events.length }, { isError: undefined, content: 'y y y', snapshots: 2 });
 	});
 
+	test('a relative file_path without a working directory is refused', async () => {
+		const { sdk, handlers } = makeSdk();
+		const fileService = createInMemoryFileService(disposables, Schemas.file);
+		await buildEditorToolMcpServer(sdk, fileService, new NullLogService(), filePath => resolveClaudeEditorPathOnDisk(filePath, [], fileService), { beforeEdit: async () => { }, afterEdit: async () => { } });
+		const result = await handlers.get('Write')!({ file_path: '../x.txt', content: 'x' }, undefined);
+		assert.deepStrictEqual({ isError: result.isError, exists: await fileService.exists(URI.file('/x.txt')) }, { isError: true, exists: false });
+	});
+
 	test('Edit fails for a missing file, an empty or an unchanged old_string', async () => {
 		const h = await setup();
 		await h.fileService.writeFile(URI.file('/work/a.txt'), VSBuffer.fromString('abc'));
@@ -235,7 +243,13 @@ suite('claudeEditorToolMcpServer', () => {
 	});
 
 	test('resolveClaudeEditorPathOnDisk follows links into the workspace, also for files that do not exist yet', async () => {
-		const links: Record<string, string> = { '/link/a.ts': '/work/a.ts', '/link': '/work', '/work': '/work', '/elsewhere/b.ts': '/elsewhere/b.ts' };
+		const links: Record<string, string> = {
+			'/link/a.ts': '/work/a.ts', '/link': '/work', '/work': '/work', '/work/e.ts': '/work/e.ts', '/elsewhere/b.ts': '/elsewhere/b.ts',
+			// A link inside the workspace to a file outside it.
+			'/work/out': '/etc/out', '/work/out/f.ts': '/etc/out/f.ts',
+			// A working directory that is itself a link; the CLI reports files by the real path.
+			'/linked-work': '/data/proj', '/data/proj': '/data/proj', '/data/proj/g.ts': '/data/proj/g.ts',
+		};
 		const fileService = {
 			realpath: async (resource: URI) => {
 				const real = links[resource.fsPath];
@@ -248,12 +262,20 @@ suite('claudeEditorToolMcpServer', () => {
 			await resolveClaudeEditorPathOnDisk('/elsewhere/b.ts', [root], fileService),
 			await resolveClaudeEditorPathOnDisk('/nowhere/d.ts', [root], fileService),
 			await resolveClaudeEditorPathOnDisk('/work/e.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/work/out/f.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/work/out/new.ts', [root], fileService),
+			await resolveClaudeEditorPathOnDisk('/data/proj/g.ts', [URI.file('/linked-work')], fileService),
+			await resolveClaudeEditorPathOnDisk('/linked-work/g.ts', [URI.file('/linked-work')], fileService),
 		], [
 			{ path: '/work/a.ts', inWorkspace: true },
 			{ path: '/work/new/c.ts', inWorkspace: true },
 			{ path: '/elsewhere/b.ts', inWorkspace: false },
 			{ path: '/nowhere/d.ts', inWorkspace: false },
 			{ path: '/work/e.ts', inWorkspace: true },
+			{ path: '/etc/out/f.ts', inWorkspace: false },
+			{ path: '/etc/out/new.ts', inWorkspace: false },
+			{ path: '/data/proj/g.ts', inWorkspace: true },
+			{ path: '/data/proj/g.ts', inWorkspace: true },
 		]);
 	});
 

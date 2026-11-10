@@ -7403,7 +7403,7 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		});
 	});
 
-	test('editor tools: plan mode denies edits in the working directory, allows the .claude directory and asks elsewhere', async () => {
+	test('editor tools: plan mode denies edits in the working directory, allows the plans directory and asks elsewhere', async () => {
 		const { ctx, canUseTool } = await materialize({ permissionMode: 'plan' }, undefined, true);
 		const signals: AgentSignal[] = [];
 		disposables.add(ctx.agent.onDidChatProgress(signal => signals.push(signal)));
@@ -7411,25 +7411,28 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		const insideDotted = { file_path: '/elsewhere/../work/a.ts', content: 'x' };
 		const plan = { file_path: '/mock-home/.claude/plans/plan.md', content: 'plan' };
 		const elsewhere = { file_path: '/elsewhere/notes.md', content: 'x' };
+		const settings = { file_path: '/mock-home/.claude/settings.json', content: '{}' };
 
 		const results = [
 			await canUseTool('mcp__editor__Write', inside, makeOptions('tu_plan_in')),
 			await canUseTool('mcp__editor__Write', insideDotted, makeOptions('tu_plan_in_dotted')),
 			await canUseTool('mcp__editor__Write', plan, makeOptions('tu_plan_file')),
 		];
-		const asked = canUseTool('mcp__editor__Write', elsewhere, makeOptions('tu_plan_elsewhere'));
-		await tick();
-		ctx.agent.respondToPermissionRequest('tu_plan_elsewhere', true);
-		results.push(await asked);
+		for (const [id, input] of [['tu_plan_elsewhere', elsewhere], ['tu_plan_settings', settings]] as const) {
+			const asked = canUseTool('mcp__editor__Write', input, makeOptions(id));
+			await tick();
+			ctx.agent.respondToPermissionRequest(id, true);
+			results.push(await asked);
+		}
 
 		assert.deepStrictEqual({
 			behaviors: results.map(result => result?.behavior),
 			planFile: results[2],
 			askedFor: signals.filter(signal => signal.kind === 'pending_confirmation').map(signal => signal.kind === 'pending_confirmation' ? signal.permissionPath : undefined),
 		}, {
-			behaviors: ['deny', 'deny', 'allow', 'allow'],
+			behaviors: ['deny', 'deny', 'allow', 'allow', 'allow'],
 			planFile: { behavior: 'allow', updatedInput: plan },
-			askedFor: ['/elsewhere/notes.md'],
+			askedFor: ['/elsewhere/notes.md', '/mock-home/.claude/settings.json'],
 		});
 	});
 

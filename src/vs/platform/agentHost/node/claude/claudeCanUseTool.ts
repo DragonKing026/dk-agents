@@ -200,9 +200,9 @@ async function dispatchCanUseTool(
  * - `bypassPermissions` allows everything without asking;
  * - `acceptEdits` allows edits inside the working directories without asking
  *   and asks for any other file, as the CLI does;
- * - `plan` refuses to modify files in the working directories, allows the
- *   plan file the CLI keeps under the user's `.claude` directory, and asks
- *   for anything else.
+ * - `plan` allows the plan file the CLI keeps under `~/.claude/plans` (also
+ *   when the home directory is a working directory), refuses to modify any
+ *   other file in the working directories, and asks for anything else.
  * Returns `undefined` when the user has to be asked.
  */
 async function decideEditorToolPermission(
@@ -226,12 +226,12 @@ async function decideEditorToolPermission(
 	if (!target) {
 		return undefined;
 	}
-	if (target.inWorkspace) {
-		return { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE };
+	const plansDirectory = URI.joinPath(session.userHome, '.claude', 'plans');
+	if (extUriBiasedIgnorePathCase.isEqualOrParent(URI.file(target.path), plansDirectory)) {
+		return { behavior: 'allow', updatedInput: input };
 	}
-	const claudeHome = URI.joinPath(session.userHome, '.claude');
-	return extUriBiasedIgnorePathCase.isEqualOrParent(URI.file(target.path), claudeHome)
-		? { behavior: 'allow', updatedInput: input }
+	return target.inWorkspace
+		? { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE }
 		: undefined;
 }
 

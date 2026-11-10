@@ -62,25 +62,27 @@ export function resolveClaudeEditorPath(filePath: string, workingDirectories: re
 }
 
 /**
- * Like {@link resolveClaudeEditorPath}, but also follows symbolic links (of the
- * file, or of its closest existing ancestor when the file does not exist yet),
- * so a link from outside the working directories to a file inside them counts
- * as inside, and the snapshot is taken of the real file. Working directories
- * that are links themselves are compared by their real path too. When the
- * real path cannot be determined, the lexical resolution stands.
+ * Like {@link resolveClaudeEditorPath}, but judged by where the file really
+ * is: symbolic links are followed (of the file, or of its closest existing
+ * ancestor when the file does not exist yet), so a link from outside the
+ * working directories to a file inside them counts as inside, and a link
+ * inside them to a file outside counts as outside. Working directories that
+ * are links themselves are compared by their real path too, since the CLI
+ * reports files by the real path of its working directory. The snapshot is
+ * taken of the real file. When the real path cannot be determined, the
+ * lexical resolution stands.
  */
 export async function resolveClaudeEditorPathOnDisk(filePath: string, workingDirectories: readonly URI[], fileService: IFileService): Promise<IResolvedClaudeEditorPath> {
 	const lexical = resolveClaudeEditorPath(filePath, workingDirectories);
-	if (lexical.inWorkspace) {
+	if (!isAbsolute(lexical.path)) {
 		return lexical;
 	}
 	const real = await realpathOfClosestExisting(lexical.path, fileService);
-	if (real === undefined || real === lexical.path) {
+	if (real === undefined) {
 		return lexical;
 	}
 	const realDirectories = await Promise.all(workingDirectories.map(directory => fileService.realpath(directory).then(uri => uri ?? directory, () => directory)));
-	const inWorkspace = isInsideAny(real, workingDirectories) || isInsideAny(real, realDirectories);
-	return { path: inWorkspace ? real : lexical.path, inWorkspace };
+	return { path: real, inWorkspace: isInsideAny(real, workingDirectories) || isInsideAny(real, realDirectories) };
 }
 
 function isInsideAny(path: string, directories: readonly URI[]): boolean {
@@ -227,8 +229,10 @@ function toCrlf(text: string): string {
  * rejecting; a snapshot left open by a failed write is released when the
  * tool's result reaches the file-edit observer.
  *
- * `Edit` writes with the etag of the content it read, so a file the user or
- * another tool changed in between is not blindly overwritten. When the file
+ * `Edit` writes with the etag and mtime of the content it read, so a file the
+ * user or another tool changed in between (as far as the file service tells a
+ * change: a later mtime with a different size) is not blindly overwritten.
+ * When the file
  * uses CRLF line endings and `old_string` is not found as given, the match is
  * retried with CRLF line endings in both `old_string` and `new_string`.
  */
@@ -276,6 +280,9 @@ export async function buildEditorToolMcpServer(
 				return errorResult('old_string must not be empty. Use Write to create a file or replace its whole content.');
 			}
 			const target = await resolveTarget(filePath);
+			if (!isAbsolute(target.path)) {
+				return errorResult(`file_path must be absolute: ${filePath}`);
+			}
 			let content;
 			try {
 				content = await fileService.readFile(URI.file(target.path));
@@ -306,6 +313,9 @@ export async function buildEditorToolMcpServer(
 		Write: async args => {
 			const { file_path: filePath, content } = args as { file_path: string; content: string };
 			const target = await resolveTarget(filePath);
+			if (!isAbsolute(target.path)) {
+				return errorResult(`file_path must be absolute: ${filePath}`);
+			}
 			const existed = await fileService.exists(URI.file(target.path));
 			// The parent directory is created before the snapshot, so a failed
 			// write of a new file leaves an empty directory behind at worst.
