@@ -6,13 +6,7 @@ The runtime side (`src/vs/platform/agentHost/`) downloads and caches the SDK tar
 
 ## How the pipeline uses this
 
-The platform packaging jobs (Linux, macOS, Windows, Alpine) each include the shared template `build/azure-pipelines/common/agent-sdk-produce.yml` before the existing `gulp vscode-<platform>-<arch>-min-ci` step:
-
-```yaml
-- template: ../../common/agent-sdk-produce.yml@self
-  parameters:
-    vscodePlatform: linux
-```
+A platform packaging job runs the producer (`produce.ts`) before the existing `gulp vscode-<platform>-<arch>-min-ci` step on the same machine.
 
 The template runs `node build/agent-sdk/produce.ts --vscode-platform=<x>
 --arch=$(VSCODE_ARCH)`, which iterates the SDKs (`SDKS = ['claude',

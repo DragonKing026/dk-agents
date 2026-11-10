@@ -78,24 +78,11 @@
 		"compiler options": [
 			"src/tsconfig*"
 		],
-		// How the test jobs install dependencies, and the key of their node_modules cache (see
-		// .github/actions/restore-node-modules).
+		// How dependencies are installed.
 		"dependency installation": [
 			"build/npm/**",
-			"build/azure-pipelines/win32/exec.ps1",
 			"build/.npmrc",
-			"build/.cachesalt",
-			"build/azure-pipelines/common/computeNodeModulesCacheKey.ts",
-			"build/azure-pipelines/common/cacheKeys.ts"
-		],
-		// The macOS and Windows unit test jobs and the actions they use.
-		"test job definition": [
-			".github/workflows/pr.yml",
-			".github/workflows/pr-darwin-test.yml",
-			".github/workflows/pr-win32-test.yml",
-			".github/workflows/node_modules_cache/**",
-			".github/actions/setup-electron/**",
-			".github/actions/restore-node-modules/**"
+			"build/.cachesalt"
 		],
 		// ripple and this file decide what runs.
 		"test planner": [
