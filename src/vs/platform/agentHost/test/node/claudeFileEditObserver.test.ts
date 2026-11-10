@@ -26,6 +26,7 @@ import { AgentHostClientConnectionKind, AgentHostLaunchKind, AgentHostTransportK
 import { IAgentEditAttributionService, NullAgentEditAttributionService } from '../../common/fileEditAttribution.js';
 import { ISessionDatabase, ISessionDataService } from '../../common/sessionDataService.js';
 import { ToolResultContentType } from '../../common/state/sessionState.js';
+import { ClaudeEditSnapshotBridge } from '../../node/claude/claudeEditorToolMcpServer.js';
 import { ClaudeFileEditObserver } from '../../node/claude/claudeFileEditObserver.js';
 import { ClaudeMapperState } from '../../node/claude/claudeMapSessionEvents.js';
 import { IEditSurvivalReporterFactory, NullEditSurvivalReporterFactory } from '../../node/shared/editSurvivalReporter.js';
@@ -43,7 +44,7 @@ interface IObserverHarness {
 	readonly fileEditCoordinator: AgentHostFileEditCoordinator;
 }
 
-function createObserver(disposables: Pick<import('../../../../base/common/lifecycle.js').DisposableStore, 'add'>, owner: IAgentChatOwnerRef = fixedChatOwnerRef(URI.parse('claude:/sess-1'))): IObserverHarness {
+function createObserver(disposables: Pick<import('../../../../base/common/lifecycle.js').DisposableStore, 'add'>, owner: IAgentChatOwnerRef = fixedChatOwnerRef(URI.parse('claude:/sess-1')), bridge?: ClaudeEditSnapshotBridge): IObserverHarness {
 	const fileService = createInMemoryFileService(disposables, Schemas.file);
 
 	const db = new TestSessionDatabase();
@@ -72,6 +73,7 @@ function createObserver(disposables: Pick<import('../../../../base/common/lifecy
 		'claude:/sess-1',
 		owner,
 		dbRef,
+		bridge,
 	));
 	return { observer, db, fileService, mapperState: new ClaudeMapperState(), arcReports, fileEditCoordinator };
 }
@@ -182,6 +184,90 @@ suite('ClaudeFileEditObserver', () => {
 			]), 'turn-1', mapperState, { uri: 'ahp-chat:/00000000-0000-4000-8000-000000000001', isSubagent });
 		}
 		assert.deepStrictEqual(arcReports.map(r => r.isSubagent), [false, true]);
+	});
+
+	test('editor tools: the handler snapshots through the bridge and the observer only collects the result', async () => {
+		const bridge = new ClaudeEditSnapshotBridge();
+		const { observer, fileService, mapperState, arcReports } = createObserver(disposables, undefined, bridge);
+		const file = URI.file('/work/editor.txt');
+		await fileService.writeFile(file, VSBuffer.fromString('before'));
+		const input = { file_path: file.fsPath, content: 'after' };
+
+		observer.observeAssistant(assistantMessage([
+			{ type: 'tool_use', id: 'tu-editor', name: 'mcp__editor__Write', input },
+		]), 'acceptEdits');
+		// The tool handler runs: snapshot, write, snapshot.
+		await bridge.beforeEdit(file.fsPath, input);
+		await fileService.writeFile(file, VSBuffer.fromString('after'));
+		await bridge.afterEdit(file.fsPath, input);
+		await observer.observeUser(userMessage([
+			{ type: 'tool_result', tool_use_id: 'tu-editor', content: 'ok' },
+		]), 'turn-1', mapperState);
+
+		assert.deepStrictEqual({
+			cachedType: mapperState.takeFileEdit('tu-editor')?.type,
+			reports: arcReports.map(report => report.mode),
+		}, {
+			cachedType: ToolResultContentType.FileEdit,
+			reports: ['acceptEdits'],
+		});
+	});
+
+	test('editor tools: a later edit of the same file that started before the first result arrived keeps its own snapshots', async () => {
+		const bridge = new ClaudeEditSnapshotBridge();
+		const { observer, fileService, mapperState, db } = createObserver(disposables, undefined, bridge);
+		const file = URI.file('/work/twice.txt');
+		await fileService.writeFile(file, VSBuffer.fromString('v0'));
+		const inputA = { file_path: file.fsPath, old_string: 'v0', new_string: 'v1' };
+		const inputB = { file_path: file.fsPath, old_string: 'v1', new_string: 'v2' };
+
+		observer.observeAssistant(assistantMessage([
+			{ type: 'tool_use', id: 'tu-a', name: 'mcp__editor__Edit', input: inputA },
+			{ type: 'tool_use', id: 'tu-b', name: 'mcp__editor__Edit', input: inputB },
+		]));
+		// A runs to completion, then B starts before A's tool_result is observed.
+		await bridge.beforeEdit(file.fsPath, inputA);
+		await fileService.writeFile(file, VSBuffer.fromString('v1'));
+		await bridge.afterEdit(file.fsPath, inputA);
+		await bridge.beforeEdit(file.fsPath, inputB);
+		await observer.observeUser(userMessage([{ type: 'tool_result', tool_use_id: 'tu-a', content: 'ok' }]), 'turn-1', mapperState);
+		await fileService.writeFile(file, VSBuffer.fromString('v2'));
+		await bridge.afterEdit(file.fsPath, inputB);
+		await observer.observeUser(userMessage([{ type: 'tool_result', tool_use_id: 'tu-b', content: 'ok' }]), 'turn-1', mapperState);
+
+		const decoder = new TextDecoder();
+		const edits = await Promise.all(['tu-a', 'tu-b'].map(async id => {
+			const cached = mapperState.takeFileEdit(id)?.type === ToolResultContentType.FileEdit;
+			const content = await db.readFileEditContent(id, file.fsPath);
+			return { cached, recorded: content ? `${decoder.decode(content.beforeContent)} -> ${decoder.decode(content.afterContent)}` : 'not recorded' };
+		}));
+		assert.deepStrictEqual(edits, [{ cached: true, recorded: 'v0 -> v1' }, { cached: true, recorded: 'v1 -> v2' }]);
+	});
+
+	test('editor tools: a write outside any snapshot caches no edit', async () => {
+		const bridge = new ClaudeEditSnapshotBridge();
+		const { observer, fileService, mapperState } = createObserver(disposables, undefined, bridge);
+		const file = URI.file('/home/plans/plan.md');
+		const input = { file_path: file.fsPath, content: 'plan' };
+
+		observer.observeAssistant(assistantMessage([
+			{ type: 'tool_use', id: 'tu-plan', name: 'mcp__editor__Write', input },
+		]));
+		await fileService.writeFile(file, VSBuffer.fromString('plan'));
+		await observer.observeUser(userMessage([
+			{ type: 'tool_result', tool_use_id: 'tu-plan', content: 'ok' },
+		]), 'turn-1', mapperState);
+
+		assert.strictEqual(mapperState.takeFileEdit('tu-plan'), undefined);
+	});
+
+	test('detaches from the bridge on dispose', async () => {
+		const bridge = new ClaudeEditSnapshotBridge();
+		const { observer } = createObserver(disposables, undefined, bridge);
+		observer.dispose();
+		// Falls back to a no-op instead of using the disposed tracker.
+		await bridge.beforeEdit('/work/x.txt', {});
+		await bridge.afterEdit('/work/x.txt', {});
 	});
 
 	test('observeAssistant ignores non-edit tools and tools with no path', () => {

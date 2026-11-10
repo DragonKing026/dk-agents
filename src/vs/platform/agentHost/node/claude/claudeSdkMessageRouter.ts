@@ -13,6 +13,7 @@ import { AgentSignal, type IAgentChatOwnerRef } from '../../common/agent.js';
 import type { IAgentHostClientTelemetryContext } from '../../common/agentHostTelemetry.js';
 import { ISessionDatabase } from '../../common/sessionDataService.js';
 import { subagentChatUri } from '../../common/agentHostChatMinting.js';
+import type { ClaudeEditSnapshotBridge } from './claudeEditorToolMcpServer.js';
 import { ClaudeFileEditObserver } from './claudeFileEditObserver.js';
 import { ClaudeMapperState, mapSDKMessageToAgentSignals } from './claudeMapSessionEvents.js';
 import type { SubagentRegistry } from './claudeSubagentRegistry.js';
@@ -58,12 +59,13 @@ export class ClaudeSdkMessageRouter extends Disposable {
 		dbRef: IReference<ISessionDatabase>,
 		private readonly _subagents: SubagentRegistry,
 		private readonly _clientTools: SessionClientToolsModel | undefined = undefined,
+		editSnapshotBridge: ClaudeEditSnapshotBridge | undefined = undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
 		this._editObserver = this._register(
-			instantiationService.createInstance(ClaudeFileEditObserver, _resource.toString(), _owner, dbRef),
+			instantiationService.createInstance(ClaudeFileEditObserver, _resource.toString(), _owner, dbRef, editSnapshotBridge),
 		);
 		this._terminalOutputs = instantiationService.createInstance(ClaudeTerminalOutputs);
 	}

@@ -106,6 +106,7 @@ function createRouter(
 		dbRef,
 		subagents,
 		clientTools,
+		undefined,
 	));
 	const signals: AgentSignal[] = [];
 	disposables.add(router.onDidProduceSignal(s => signals.push(s)));

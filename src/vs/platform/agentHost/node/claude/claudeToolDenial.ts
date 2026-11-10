@@ -10,6 +10,8 @@
 export const CLAUDE_USER_DECLINED_MESSAGE = 'User declined';
 /** Deny `message` when the user declines an `ExitPlanMode` plan. */
 export const CLAUDE_PLAN_DECLINED_MESSAGE = 'The user declined the plan, maybe ask why?';
+/** Deny `message` when a file edit is attempted in plan mode. */
+export const CLAUDE_PLAN_MODE_EDIT_MESSAGE = 'Plan mode is active: files in the working directory cannot be modified. Finish the plan and call ExitPlanMode to ask for approval.';
 /** Deny `message` when the user cancels an `AskUserQuestion` prompt. */
 export const CLAUDE_QUESTION_CANCELLED_MESSAGE = 'The user cancelled the question';
 

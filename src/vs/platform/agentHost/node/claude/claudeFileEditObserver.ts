@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PermissionMode, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { Disposable, IReference } from '../../../../base/common/lifecycle.js';
+import { Disposable, IReference, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../instantiation/common/instantiation.js';
 import { ILogService } from '../../../log/common/log.js';
 import { ISessionDatabase } from '../../common/sessionDataService.js';
@@ -13,6 +13,7 @@ import { FileEditTracker } from '../shared/fileEditTracker.js';
 import { CLAUDE_AGENT_PROVIDER_ID, type IAgentChatOwnerRef } from '../../common/agent.js';
 import type { ClaudeMapperState } from './claudeMapSessionEvents.js';
 import { getClaudeToolPath, isClaudeFileEditTool } from './claudeToolDisplay.js';
+import { isClaudeEditorToolName, normalizeClaudeToolName, type ClaudeEditSnapshotBridge, type IClaudeEditSnapshotter } from './claudeEditorToolMcpServer.js';
 
 /**
  * Phase 8 — file-edit observation off the SDK message stream.
@@ -39,8 +40,13 @@ import { getClaudeToolPath, isClaudeFileEditTool } from './claudeToolDisplay.js'
  * I/O before the write, which gives enough microtask headroom in
  * practice; same guarantee the production extension relies on with
  * `stream.externalEdit`.
+ *
+ * The editor-backed `Edit` and `Write` tools (`mcp__editor__*`) do not
+ * race: their handlers take both snapshots themselves through
+ * {@link IClaudeEditSnapshotter}, which this observer implements on top of
+ * the tracker, so {@link observeAssistant} only records their path.
  */
-export class ClaudeFileEditObserver extends Disposable {
+export class ClaudeFileEditObserver extends Disposable implements IClaudeEditSnapshotter {
 
 	private readonly _editTracker: FileEditTracker;
 
@@ -56,13 +62,18 @@ export class ClaudeFileEditObserver extends Disposable {
 	 * per-subagent: when a subagent emits the `tool_use`, its model
 	 * (not the parent's) is what we record.
 	 */
-	private readonly _editToolPaths = new Map<string, { readonly filePath: string; readonly toolName: string; readonly toolInput: unknown; readonly modelId: string | undefined; readonly clientContext?: IAgentHostClientTelemetryContext; readonly chatUri?: string }>();
+	private readonly _editToolPaths = new Map<string, { readonly filePath: string; readonly toolName: string; readonly toolInput: unknown; readonly modelId: string | undefined; readonly clientContext?: IAgentHostClientTelemetryContext; readonly chatUri?: string; /** The tool's handler took both snapshots itself (editor tools). */ readonly selfSnapshotted: boolean }>();
+
+	/** Permission mode of the latest assistant message, recorded with edits the editor tools snapshot. */
+	private _lastMode: PermissionMode | undefined;
 
 	constructor(
 		sessionUri: string,
 		/** The session that owns the chat, read when an edit is attributed. */
 		owner: IAgentChatOwnerRef,
 		dbRef: IReference<ISessionDatabase>,
+		/** Receives this observer as the snapshotter of the session's editor tools. */
+		editSnapshotBridge: ClaudeEditSnapshotBridge | undefined = undefined,
 		@ILogService private readonly _logService: ILogService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
@@ -75,6 +86,18 @@ export class ClaudeFileEditObserver extends Disposable {
 			() => owner.get().toString(),
 			CLAUDE_AGENT_PROVIDER_ID,
 		));
+		if (editSnapshotBridge) {
+			editSnapshotBridge.attach(this);
+			this._register(toDisposable(() => editSnapshotBridge.detach(this)));
+		}
+	}
+
+	beforeEdit(filePath: string, toolInput: unknown): Promise<void> {
+		return this._editTracker.trackEditStart(filePath, this._lastMode, toolInput);
+	}
+
+	afterEdit(filePath: string, toolInput: unknown): Promise<void> {
+		return this._editTracker.completeEdit(filePath, toolInput);
 	}
 
 	/**
@@ -88,16 +111,26 @@ export class ClaudeFileEditObserver extends Disposable {
 		if (!Array.isArray(content)) {
 			return;
 		}
+		this._lastMode = mode;
 		const modelId = typeof message.message.model === 'string' ? message.message.model : undefined;
 		for (const block of content) {
-			if (block.type !== 'tool_use' || !isClaudeFileEditTool(block.name)) {
+			if (block.type !== 'tool_use') {
 				continue;
 			}
-			const filePath = getClaudeToolPath(block.name, block.input);
+			const toolName = normalizeClaudeToolName(block.name);
+			if (!isClaudeFileEditTool(toolName)) {
+				continue;
+			}
+			const filePath = getClaudeToolPath(toolName, block.input);
 			if (!filePath) {
 				continue;
 			}
-			this._editToolPaths.set(block.id, { filePath, toolName: block.name, toolInput: block.input, modelId, clientContext, chatUri });
+			const selfSnapshotted = isClaudeEditorToolName(block.name);
+			this._editToolPaths.set(block.id, { filePath, toolName, toolInput: block.input, modelId, clientContext, chatUri, selfSnapshotted });
+			if (selfSnapshotted) {
+				// The tool's handler snapshots the file itself.
+				continue;
+			}
 			void this._editTracker.trackEditStart(filePath, mode, block.input).catch(err =>
 				this._logService.warn(`[ClaudeFileEditObserver] trackEditStart failed for ${filePath}: ${err}`));
 		}
@@ -131,7 +164,12 @@ export class ClaudeFileEditObserver extends Disposable {
 			}
 			this._editToolPaths.delete(block.tool_use_id);
 			try {
-				await this._editTracker.completeEdit(tracked.filePath, tracked.toolInput);
+				// An editor tool completed its own snapshot in its handler. Completing
+				// it again here would complete whichever edit of the file is pending
+				// instead, such as a later edit of the same file that already started.
+				if (!tracked.selfSnapshotted) {
+					await this._editTracker.completeEdit(tracked.filePath, tracked.toolInput);
+				}
 				const editChatUri = chat?.isSubagent ? chat.uri : tracked.chatUri ?? chat?.uri;
 				const fileEdit = await this._editTracker.takeCompletedEdit(turnId, block.tool_use_id, tracked.filePath, tracked.toolName, tracked.toolInput, tracked.modelId, chat?.isSubagent ?? false, tracked.clientContext, editChatUri);
 				if (fileEdit) {

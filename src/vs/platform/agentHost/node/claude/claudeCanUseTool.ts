@@ -14,8 +14,11 @@ import { getServerToolDisplay } from '../shared/serverToolGroups.js';
 import { ClaudeAgentSession } from './claudeAgentSession.js';
 import { extractServerToolName } from './claudeServerToolMcpServer.js';
 import { buildAskUserSessionInputQuestions, buildExitPlanModeConfirmationState, flattenAskUserAnswers, parseAskUserQuestionInput } from './claudeInteractiveTools.js';
-import { CLAUDE_PLAN_DECLINED_MESSAGE, CLAUDE_QUESTION_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
+import { CLAUDE_PLAN_DECLINED_MESSAGE, CLAUDE_PLAN_MODE_EDIT_MESSAGE, CLAUDE_QUESTION_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
 import { claudeConfigTarget } from './claudeSessionPermissionMode.js';
+import { isClaudeEditorToolName, normalizeClaudeToolName } from './claudeEditorToolMcpServer.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
 import { getClaudeConfirmationTitle, getClaudeInvocationMessage, getClaudePermissionKind, getClaudeToolDisplayName, getClaudeToolInputString, getClaudeToolPath, INTERACTIVE_CLAUDE_TOOLS, buildClaudeToolMeta } from './claudeToolDisplay.js';
 
 /**
@@ -117,10 +120,14 @@ export async function handleCanUseTool(
 async function dispatchCanUseTool(
 	deps: IClaudeCanUseToolDeps,
 	session: ClaudeAgentSession,
-	toolName: string,
+	sdkToolName: string,
 	input: Record<string, unknown>,
 	options: IClaudeCanUseToolOptions,
 ): Promise<PermissionResult> {
+	// The editor-backed `mcp__editor__Edit` / `mcp__editor__Write` are
+	// permissioned, displayed and tracked as the built-in `Edit` / `Write`.
+	const toolName = normalizeClaudeToolName(sdkToolName);
+
 	// Interactive tools (`AskUserQuestion`, `ExitPlanMode`) are
 	// exempt from SDK `permissionMode` auto-approval, so they reach
 	// `canUseTool` even under `bypassPermissions`. Routing then
@@ -135,13 +142,20 @@ async function dispatchCanUseTool(
 		return handleInteractiveTool(deps, session, toolName, input, options);
 	}
 
-	const serverToolName = extractServerToolName(toolName);
+	const serverToolName = extractServerToolName(sdkToolName);
 	const serverToolHost = deps.serverToolHost;
 	if (serverToolName
 		&& serverToolHost?.toolNames.includes(serverToolName)
 		&& !serverToolHost.requiresConfirmation(session.chatChannelUri.toString(), serverToolName)
 	) {
 		return { behavior: 'allow', updatedInput: input };
+	}
+
+	if (isClaudeEditorToolName(sdkToolName)) {
+		const decision = await decideEditorToolPermission(deps, session, toolName, input);
+		if (decision) {
+			return decision;
+		}
 	}
 
 	const permissionKind = getClaudePermissionKind(toolName);
@@ -177,6 +191,48 @@ async function dispatchCanUseTool(
 	return approved
 		? { behavior: 'allow', updatedInput: input }
 		: { behavior: 'deny', message: CLAUDE_USER_DECLINED_MESSAGE };
+}
+
+/**
+ * The CLI applies the session's permission mode to its built-in file tools
+ * itself, but not to MCP tools, so the host reproduces that for the editor
+ * tools, by the file's real location (links and `..` folded):
+ * - `bypassPermissions` allows everything without asking;
+ * - `acceptEdits` allows edits inside the working directories without asking
+ *   and asks for any other file, as the CLI does;
+ * - `plan` allows the plan file the CLI keeps under `~/.claude/plans` (also
+ *   when the home directory is a working directory), refuses to modify any
+ *   other file in the working directories, and asks for anything else.
+ * Returns `undefined` when the user has to be asked.
+ */
+async function decideEditorToolPermission(
+	deps: IClaudeCanUseToolDeps,
+	session: ClaudeAgentSession,
+	toolName: string,
+	input: Record<string, unknown>,
+): Promise<PermissionResult | undefined> {
+	const mode = session.getPermissionMode(deps.owner.get());
+	if (mode === 'bypassPermissions') {
+		return { behavior: 'allow', updatedInput: input };
+	}
+	if (mode !== 'acceptEdits' && mode !== 'plan') {
+		return undefined;
+	}
+	const filePath = getClaudeToolPath(toolName, input);
+	const target = filePath !== undefined ? await session.resolveEditorToolPath(filePath) : undefined;
+	if (mode === 'acceptEdits') {
+		return target?.inWorkspace ? { behavior: 'allow', updatedInput: input } : undefined;
+	}
+	if (!target) {
+		return undefined;
+	}
+	const plansDirectory = URI.joinPath(session.userHome, '.claude', 'plans');
+	if (extUriBiasedIgnorePathCase.isEqualOrParent(URI.file(target.path), plansDirectory)) {
+		return { behavior: 'allow', updatedInput: input };
+	}
+	return target.inWorkspace
+		? { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE }
+		: undefined;
 }
 
 /**
