@@ -12,13 +12,13 @@
 export const AiAgentEnvVar = 'AI_AGENT';
 
 /**
- * The value VS Code announces for processes it spawns on behalf of an agent
- * session, following the `github_copilot_<surface>` form asked of every GitHub
- * Copilot surface. Must stay stable: it is a wire contract with the reporting
- * pipeline, and `gh` only accepts values matching `[a-zA-Z0-9_-]+`.
+ * The value DK Code announces for processes it spawns on behalf of an agent
+ * session. It is `dk_code_agent`, so tools such as `gh` do not attribute their
+ * traffic to GitHub Copilot. `gh` only accepts values matching `[a-zA-Z0-9_-]+`.
+ * User hooks can read the variable to tell that DK Code started the session.
  *
  * This must be set for *every* process an agent session spawns — the local
  * (in-workbench) harness terminal tool, the agent host process and every agent
- * SDK subprocess it launches — otherwise the surface is under-counted.
+ * SDK subprocess it launches.
  */
-export const AiAgentEnvValue = 'github_copilot_vscode_agent';
+export const AiAgentEnvValue = 'dk_code_agent';

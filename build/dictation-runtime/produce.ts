@@ -9,8 +9,7 @@
  * build it writes a small JSON results file that the gulpfile-side `packageTask`
  * reads to stamp `product.json`'s `dictationRuntime` field.
  *
- * Run as a pipeline step BEFORE the gulp packaging step on the same agent (via
- * `build/azure-pipelines/common/dictation-runtime-produce.yml`).
+ * Run as a build step BEFORE the gulp packaging step on the same machine.
  *
  * Two independent axes:
  *
