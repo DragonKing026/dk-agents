@@ -18,6 +18,7 @@ import { ISessionDatabase } from '../../common/sessionDataService.js';
 import { ActionType } from '../../common/state/sessionActions.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { ClaudePromptQueue, IPendingSdkMessage } from './claudePromptQueue.js';
+import type { ClaudeEditSnapshotBridge } from './claudeEditorToolMcpServer.js';
 import { ClaudeSdkMessageRouter } from './claudeSdkMessageRouter.js';
 import type { SubagentRegistry } from './claudeSubagentRegistry.js';
 import type { SessionClientToolsModel } from './clientTools/claudeSessionClientToolsModel.js';
@@ -250,6 +251,7 @@ export class ClaudeSdkPipeline extends Disposable {
 		dbRef: IReference<ISessionDatabase>,
 		subagents: SubagentRegistry,
 		clientTools: SessionClientToolsModel | undefined = undefined,
+		editSnapshotBridge: ClaudeEditSnapshotBridge | undefined = undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILogService private readonly _logService: ILogService,
 	) {
@@ -267,7 +269,7 @@ export class ClaudeSdkPipeline extends Disposable {
 			id: pendingId,
 		})));
 		this._router = this._register(instantiationService.createInstance(
-			ClaudeSdkMessageRouter, chatChannelUri, owner, resource, dbRef, subagents, clientTools,
+			ClaudeSdkMessageRouter, chatChannelUri, owner, resource, dbRef, subagents, clientTools, editSnapshotBridge,
 		));
 		this._register(this._router.onDidProduceSignal(s => this._onDidProduceSignal.fire(s)));
 		// Dispose chain → abort → SDK cleanup. Reads the *current*

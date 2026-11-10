@@ -12,6 +12,7 @@ import { createErrorResponsePart, ResponsePartKind, ToolResultContentType, type 
 import { extractForwardedErrorInfo } from '../shared/proxyChatError.js';
 import { buildTopLevelSubagentReadyAction, emitInnerAssistantSignals, mapSubagentSystemMessage, SUBAGENT_SPAWNING_TOOL_NAMES, tagWithParent } from './claudeSubagentSignals.js';
 import type { SubagentRegistry } from './claudeSubagentRegistry.js';
+import { normalizeClaudeToolName } from './claudeEditorToolMcpServer.js';
 import { stripClientToolNamePrefix, hasClientToolNamePrefix } from './clientTools/claudeClientToolMcpServer.js';
 import { buildClaudeToolMeta, getClaudePastTenseMessage, getClaudeToolDisplayName, isClaudeFileEditTool } from './claudeToolDisplay.js';
 import { claudeToolDenialCode } from './claudeToolDenial.js';
@@ -634,7 +635,12 @@ function mapStreamEvent(
 				// tools. SDK-owned tools (Read, Write, Bash, etc.) and
 				// subagent spawn tools pass through unchanged because
 				// they don't carry the prefix.
-				const toolName = stripClientToolNamePrefix(block.name);
+				// The editor-backed `mcp__editor__Edit` / `mcp__editor__Write`
+				// are normalized to `Edit` / `Write` the same way, so the rest
+				// of the pipeline (display, permissions, file-edit review)
+				// treats them as the built-in file-edit tools. They are not
+				// client tools: `isClientTool` stays false.
+				const toolName = normalizeClaudeToolName(stripClientToolNamePrefix(block.name));
 				const isClientTool = hasClientToolNamePrefix(block.name);
 				state.startToolBlock(event.index, block.id, toolName, turnId, isClientTool);
 				// Phase 12 — subagent correlation bookkeeping. Either this

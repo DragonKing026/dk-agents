@@ -25,6 +25,9 @@ import type { IMcpServerDefinition } from '../../../agentPlugins/common/pluginPa
 import { isEqual } from '../../../../base/common/resources.js';
 import { resolveMcpServerWorkingDirectory } from '../shared/mcpServerWorkingDirectory.js';
 
+/** Built-in tools turned off when the session uses the editor-backed tools. */
+export const CLAUDE_EDITOR_TOOLS_DISALLOWED: readonly string[] = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'];
+
 type ClaudeSdkDeniedMcpServerSpec = NonNullable<Settings['deniedMcpServers']>[number];
 
 /** The Claude SDK validator accepts exactly one matching strategy per deny entry. */
@@ -78,6 +81,13 @@ export interface IBuildOptionsInput {
 	 * default.
 	 */
 	readonly allowedTools?: readonly string[];
+	/**
+	 * When `true`, the CLI's own file-writing and shell tools are disabled
+	 * ({@link CLAUDE_EDITOR_TOOLS_DISALLOWED}) because the session serves
+	 * `Edit` and `Write` from the in-process `editor` MCP server and the
+	 * workbench terminal tools instead.
+	 */
+	readonly editorTools?: boolean;
 	/**
 	 * Local plugin directories to load at SDK startup. Projected onto
 	 * `Options.plugins` as `{ type: 'local', path }`. Omitted from the
@@ -180,7 +190,7 @@ export async function buildOptions(
 		allowDangerouslySkipPermissions: true,
 		canUseTool: input.canUseTool,
 		onElicitation: input.onElicitation,
-		disallowedTools: ['WebSearch'],
+		disallowedTools: input.editorTools ? ['WebSearch', ...CLAUDE_EDITOR_TOOLS_DISALLOWED] : ['WebSearch'],
 		includePartialMessages: true,
 		forwardSubagentText: true,
 		enableFileCheckpointing: true,

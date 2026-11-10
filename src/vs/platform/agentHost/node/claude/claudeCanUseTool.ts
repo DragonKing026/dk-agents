@@ -14,8 +14,9 @@ import { getServerToolDisplay } from '../shared/serverToolGroups.js';
 import { ClaudeAgentSession } from './claudeAgentSession.js';
 import { extractServerToolName } from './claudeServerToolMcpServer.js';
 import { buildAskUserSessionInputQuestions, buildExitPlanModeConfirmationState, flattenAskUserAnswers, parseAskUserQuestionInput } from './claudeInteractiveTools.js';
-import { CLAUDE_PLAN_DECLINED_MESSAGE, CLAUDE_QUESTION_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
-import { claudeConfigTarget } from './claudeSessionPermissionMode.js';
+import { CLAUDE_PLAN_DECLINED_MESSAGE, CLAUDE_PLAN_MODE_EDIT_MESSAGE, CLAUDE_QUESTION_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
+import { claudeConfigTarget, readClaudePermissionMode } from './claudeSessionPermissionMode.js';
+import { isClaudeEditorToolName, normalizeClaudeToolName, resolveClaudeEditorPath } from './claudeEditorToolMcpServer.js';
 import { getClaudeConfirmationTitle, getClaudeInvocationMessage, getClaudePermissionKind, getClaudeToolDisplayName, getClaudeToolInputString, getClaudeToolPath, INTERACTIVE_CLAUDE_TOOLS, buildClaudeToolMeta } from './claudeToolDisplay.js';
 
 /**
@@ -117,10 +118,14 @@ export async function handleCanUseTool(
 async function dispatchCanUseTool(
 	deps: IClaudeCanUseToolDeps,
 	session: ClaudeAgentSession,
-	toolName: string,
+	sdkToolName: string,
 	input: Record<string, unknown>,
 	options: IClaudeCanUseToolOptions,
 ): Promise<PermissionResult> {
+	// The editor-backed `mcp__editor__Edit` / `mcp__editor__Write` are
+	// permissioned, displayed and tracked as the built-in `Edit` / `Write`.
+	const toolName = normalizeClaudeToolName(sdkToolName);
+
 	// Interactive tools (`AskUserQuestion`, `ExitPlanMode`) are
 	// exempt from SDK `permissionMode` auto-approval, so they reach
 	// `canUseTool` even under `bypassPermissions`. Routing then
@@ -135,13 +140,20 @@ async function dispatchCanUseTool(
 		return handleInteractiveTool(deps, session, toolName, input, options);
 	}
 
-	const serverToolName = extractServerToolName(toolName);
+	const serverToolName = extractServerToolName(sdkToolName);
 	const serverToolHost = deps.serverToolHost;
 	if (serverToolName
 		&& serverToolHost?.toolNames.includes(serverToolName)
 		&& !serverToolHost.requiresConfirmation(session.chatChannelUri.toString(), serverToolName)
 	) {
 		return { behavior: 'allow', updatedInput: input };
+	}
+
+	if (isClaudeEditorToolName(sdkToolName)) {
+		const decision = decideEditorToolPermission(deps, session, toolName, input);
+		if (decision) {
+			return decision;
+		}
 	}
 
 	const permissionKind = getClaudePermissionKind(toolName);
@@ -177,6 +189,34 @@ async function dispatchCanUseTool(
 	return approved
 		? { behavior: 'allow', updatedInput: input }
 		: { behavior: 'deny', message: CLAUDE_USER_DECLINED_MESSAGE };
+}
+
+/**
+ * The CLI applies the session's permission mode to its built-in file tools
+ * itself, but not to MCP tools, so the host reproduces that for the editor
+ * tools: `acceptEdits` and `bypassPermissions` allow without asking, and
+ * `plan` refuses to modify files in the working directories while still
+ * allowing the plan file the CLI writes elsewhere. Returns `undefined` when the
+ * user has to be asked.
+ */
+function decideEditorToolPermission(
+	deps: IClaudeCanUseToolDeps,
+	session: ClaudeAgentSession,
+	toolName: string,
+	input: Record<string, unknown>,
+): PermissionResult | undefined {
+	const mode = readClaudePermissionMode(deps.configurationService, deps.owner.get(), session.chatChannelUri) ?? 'default';
+	if (mode === 'plan') {
+		const filePath = getClaudeToolPath(toolName, input);
+		const inWorkspace = filePath !== undefined && resolveClaudeEditorPath(filePath, session.workingDirectories ?? []).inWorkspace;
+		return inWorkspace
+			? { behavior: 'deny', message: CLAUDE_PLAN_MODE_EDIT_MESSAGE }
+			: { behavior: 'allow', updatedInput: input };
+	}
+	if (mode === 'acceptEdits' || mode === 'bypassPermissions') {
+		return { behavior: 'allow', updatedInput: input };
+	}
+	return undefined;
 }
 
 /**

@@ -305,6 +305,32 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 		assert.deepStrictEqual(log.warns, []);
 	});
 
+	test('content_block_start for mcp__editor__Edit is announced exactly like the plain Edit tool, not as a client tool', () => {
+		const log = new CapturingLogService();
+		const map = (toolName: string, state: ClaudeMapperState) => mapSDKMessageToAgentSignals(
+			makeStreamEvent(SESSION_ID, makeContentBlockStartToolUse(0, 'tu_e', toolName)),
+			SESSION,
+			TURN_ID,
+			state,
+			log,
+			r(),
+		);
+		const editorState = new ClaudeMapperState();
+		const builtInState = new ClaudeMapperState();
+
+		const signals = map('mcp__editor__Edit', editorState);
+
+		assert.deepStrictEqual({
+			signals,
+			tracked: editorState.lookupToolCall('tu_e'),
+			warns: log.warns,
+		}, {
+			signals: map('Edit', builtInState),
+			tracked: { turnId: TURN_ID, toolName: 'Edit', isClientTool: false },
+			warns: [],
+		});
+	});
+
 	test('Test 10b — a tool denied by the user maps to result.error.code = denied', () => {
 		const log = new NullLogService();
 		const state = new ClaudeMapperState();

@@ -32,6 +32,7 @@ import { CustomizationType, type Customization, type ToolCallResult } from '../.
 import { IClaudeAgentSdkService } from './claudeAgentSdkService.js';
 import { buildClientMcpServers, buildOptions, toClaudeMcpServers, type ClaudeDeniedMcpServerSpec } from './claudeSdkOptions.js';
 import { claudeTransportForProvider, parseClaudeModelSelection, toClaudeSdkModelId } from './claudeModelSelection.js';
+import { buildEditorToolMcpServer, CLAUDE_EDITOR_TOOL_MCP_SERVER_NAME, ClaudeEditSnapshotBridge } from './claudeEditorToolMcpServer.js';
 import { buildServerToolMcpServer, CLAUDE_SERVER_TOOL_MCP_SERVER_NAME, serverToolAllowList } from './claudeServerToolMcpServer.js';
 import { convertToolCallResult } from './clientTools/claudeClientToolResult.js';
 import { readClaudePermissionMode } from './claudeSessionPermissionMode.js';
@@ -55,7 +56,7 @@ import { ClaudeSdkPipeline, IRematerializer, type ISdkResolvedCustomizations } f
 import { SubagentRegistry } from './claudeSubagentRegistry.js';
 import { getSdkMcpServerEnablement, isCustomizationSdkEligible, resolveCustomizationEnablement } from '../shared/customizationEnablementGate.js';
 import { McpServerType, type IMcpServerConfiguration } from '../../../mcp/common/mcpPlatformTypes.js';
-import { AgentHostGitHubMcpServerEnabledConfigKey, platformRootSchema } from '../../common/agentHostSchema.js';
+import { AgentHostClaudeEditorToolsEnabledConfigKey, AgentHostGitHubMcpServerEnabledConfigKey, platformRootSchema } from '../../common/agentHostSchema.js';
 import { GITHUB_MCP_SERVER_NAME, resolveGitHubMcpServerConfiguration } from '../shared/githubMcpServer.js';
 import { ICopilotApiService } from '../shared/copilotApiService.js';
 import { IAgentHostAuthenticationService } from '../agentHostAuthenticationService.js';
@@ -228,6 +229,8 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	}
 	private readonly _customizationWatcher = this._register(new MutableDisposable<DisposableStore>());
 	private _mcpDiscovery: SessionMcpDiscovery | undefined;
+	/** Connects the `editor` MCP server's tools to the file-edit tracker of the current SDK pipeline. */
+	private readonly _editSnapshotBridge = new ClaudeEditSnapshotBridge();
 	private _mcpLaunchEnablementRevision = 0;
 	private _appliedMcpLaunchEnablementRevision = 0;
 
@@ -661,6 +664,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 				mcpServers,
 				deniedMcpServers,
 				allowedTools,
+				editorTools: this._isEditorToolsEnabled(),
 				plugins,
 				agent: agentName,
 				telemetry,
@@ -695,6 +699,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 				dbRef,
 				this.subagents,
 				this.toolDiff.model,
+				this._editSnapshotBridge,
 			));
 		} catch (err) {
 			dbRef.dispose();
@@ -791,6 +796,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 					mcpServers: rebuildMcp,
 					deniedMcpServers: rebuildDeniedMcpServers,
 					allowedTools: rebuildAllowedTools,
+					editorTools: this._isEditorToolsEnabled(),
 					plugins: rebuildPlugins,
 					agent: rebuildAgentName,
 					telemetry,
@@ -850,12 +856,16 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 		const serverToolServer = serverToolHost && serverToolDefinitions?.length
 			? await buildServerToolMcpServer(serverToolHost, this._chatChannelUri.toString(), this._sdkService, serverToolDefinitions)
 			: undefined;
-		const mcpServers = (Object.keys(externalServers.servers).length === 0 && !clientServers && !serverToolServer)
+		const editorToolServer = this._isEditorToolsEnabled()
+			? await buildEditorToolMcpServer(this._sdkService, this._fileService, this._logService, () => this.workingDirectories ?? [], this._editSnapshotBridge)
+			: undefined;
+		const mcpServers = (Object.keys(externalServers.servers).length === 0 && !clientServers && !serverToolServer && !editorToolServer)
 			? undefined
 			: {
 				...externalServers.servers,
 				...(clientServers ?? {}),
 				...(serverToolServer ? { [CLAUDE_SERVER_TOOL_MCP_SERVER_NAME]: serverToolServer } : {}),
+				...(editorToolServer ? { [CLAUDE_EDITOR_TOOL_MCP_SERVER_NAME]: editorToolServer } : {}),
 			};
 		// Exclude server tools that can require user confirmation from the
 		// auto-approve allow-list so the SDK surfaces them via `canUseTool`
@@ -873,6 +883,15 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 			allowedTools: autoApproveToolNames ? serverToolAllowList(autoApproveToolNames) : undefined,
 			agentMergeRestrictedMcpServerNames: externalServers.agentMergeRestrictedServerNames,
 		};
+	}
+
+	/**
+	 * Whether the session replaces the CLI's built-in file-writing and shell tools
+	 * with the editor-backed ones. Read at every (re)start, so a change applies to
+	 * the next one.
+	 */
+	private _isEditorToolsEnabled(): boolean {
+		return this._configurationService.getRootValue(platformRootSchema, AgentHostClaudeEditorToolsEnabledConfigKey) !== false;
 	}
 
 	private async _getGitHubMcpServerConfiguration(): Promise<IMcpServerConfiguration | undefined> {

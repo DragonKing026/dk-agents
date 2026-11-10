@@ -280,6 +280,21 @@ suite('claudeSdkOptions / buildOptions plugins projection', () => {
 		assert.strictEqual(opts.plugins, undefined);
 	});
 
+	test('disallows only WebSearch by default', async () => {
+		const opts = await buildOptions(input(undefined), proxyTransport, () => { });
+		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch']);
+	});
+
+	test('editorTools additionally disallows the built-in file-writing and shell tools', async () => {
+		const opts = await buildOptions({ ...input(undefined), editorTools: true }, proxyTransport, () => { });
+		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']);
+	});
+
+	test('editorTools false keeps the default disallowed tools', async () => {
+		const opts = await buildOptions({ ...input(undefined), editorTools: false }, proxyTransport, () => { });
+		assert.deepStrictEqual(opts.disallowedTools, ['WebSearch']);
+	});
+
 	test('projects denied workspace MCP servers into startup settings', async () => {
 		const opts = await buildOptions({
 			...input(undefined),
