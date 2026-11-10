@@ -568,6 +568,9 @@ export const AgentHostGitHubMcpServerEnabledConfigKey = 'githubMcpServerEnabled'
 /** Root config key forwarded from the renderer for the editor-backed file tools of Claude sessions. */
 export const AgentHostClaudeEditorToolsEnabledConfigKey = 'claudeEditorTools';
 
+/** Root config key forwarded from the renderer for running Claude sessions' commands in the editor terminal. */
+export const AgentHostClaudeEditorTerminalEnabledConfigKey = 'claudeEditorTerminal';
+
 /** Root config key forwarded from the renderer for GitHub's Computer Use plugin. */
 export const AgentHostComputerUseEnabledConfigKey = 'computerUseEnabled';
 
@@ -922,6 +925,12 @@ export const platformRootSchema = createSchema({
 		title: localize('agentHost.config.claudeEditorTools.title', "Claude Editor Tools"),
 		description: localize('agentHost.config.claudeEditorTools.description', "Whether Claude sessions edit files through the editor's own Edit and Write tools instead of the built-in ones, so that every change is snapshotted for review and checkpoints."),
 		default: true,
+	}),
+	[AgentHostClaudeEditorTerminalEnabledConfigKey]: schemaProperty<boolean>({
+		type: 'boolean',
+		title: localize('agentHost.config.claudeEditorTerminal.title', "Claude Editor Terminal"),
+		description: localize('agentHost.config.claudeEditorTerminal.description', "Whether Claude sessions run commands through the editor's terminal tools instead of the built-in Bash tool, when a client publishes them."),
+		default: false,
 	}),
 	[AgentHostComputerUseEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',

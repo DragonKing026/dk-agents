@@ -150,6 +150,9 @@ export const AgentHostGitHubMcpServerEnabledSettingId = 'chat.agentHost.githubMc
 /** Configuration key controlling the editor-backed file tools of Claude agent-host sessions. */
 export const AgentHostClaudeEditorToolsEnabledSettingId = 'chat.agentHost.claudeEditorTools.enabled';
 
+/** Configuration key controlling whether Claude agent-host sessions run commands in the editor terminal instead of Bash. */
+export const AgentHostClaudeEditorTerminalEnabledSettingId = 'chat.agentHost.claudeEditorTools.terminal';
+
 /** Configuration key offering GitHub's Computer Use plugin to local agent-host Copilot sessions. */
 export const AgentHostComputerUseEnabledSettingId = 'chat.agentHost.computerUse.enabled';
 

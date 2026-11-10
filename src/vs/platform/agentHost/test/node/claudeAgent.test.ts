@@ -50,7 +50,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { INativeEnvironmentService } from '../../../environment/common/environment.js';
 import { AgentPermissionKind, AgentChatMigrationDeferred, IActiveClient, IAgent, IAgentChatContext, IAgentChatDataChange, IAgentChatMetadata, IAgentCreateChatOptions, IAgentCreateChatResult, IAgentCreateSessionConfig, IAgentCreateSessionResult, IAgentMaterializeChatEvent, IAgentSpawnChatEvent, AgentSession, AgentSignal, GITHUB_COPILOT_PROTECTED_RESOURCE, fixedChatOwnerRef } from '../../common/agent.js';
 import { subagentChatUri } from '../../common/agentHostChatMinting.js';
-import { AgentHostAutoApprovePolicyRestrictedConfigKey, AgentHostClaudeEditorToolsEnabledConfigKey, AgentHostGitHubMcpServerEnabledConfigKey } from '../../common/agentHostSchema.js';
+import { AgentHostAutoApprovePolicyRestrictedConfigKey, AgentHostClaudeEditorTerminalEnabledConfigKey, AgentHostClaudeEditorToolsEnabledConfigKey, AgentHostGitHubMcpServerEnabledConfigKey } from '../../common/agentHostSchema.js';
 import { AgentHostConfigKey } from '../../common/agentHostCustomizationConfig.js';
 import { SessionConfigKey } from '../../common/sessionConfigKeys.js';
 import { AgentFeedbackAttachmentDisplayKind } from '../../common/meta/agentFeedbackAttachments.js';
@@ -7130,7 +7130,7 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 	 * `createSession` does NOT touch state — that's the AgentService
 	 * layer's job, which we don't run here).
 	 */
-	async function materialize(seedConfig?: { permissionMode?: string }, serverToolHost?: IAgentServerToolHost, editorTools = false, clientTools?: readonly ToolDefinition[]): Promise<{
+	async function materialize(seedConfig?: { permissionMode?: string }, serverToolHost?: IAgentServerToolHost, editorTools: boolean | { terminal: boolean } = false, clientTools?: readonly ToolDefinition[]): Promise<{
 		ctx: ITestContext;
 		canUseTool: NonNullable<Options['canUseTool']>;
 		sessionUri: URI;
@@ -7138,7 +7138,7 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 	}> {
 		const ctx = createTestContext(disposables);
 		if (editorTools) {
-			ctx.configService.updateRootConfig({ [AgentHostClaudeEditorToolsEnabledConfigKey]: true });
+			ctx.configService.updateRootConfig({ [AgentHostClaudeEditorToolsEnabledConfigKey]: true, ...(typeof editorTools === 'object' ? { [AgentHostClaudeEditorTerminalEnabledConfigKey]: editorTools.terminal } : {}) });
 		}
 		if (serverToolHost) {
 			ctx.agent.setServerToolHost(serverToolHost);
@@ -7311,15 +7311,21 @@ suite('ClaudeAgent (Phase 7 §3.4 — _handleCanUseTool)', () => {
 		});
 	});
 
-	test('editor tools: Bash is disabled only when the client publishes the terminal tool', async () => {
+	test('editor tools: Bash is disabled only with the terminal setting on and the client publishing the terminal tool', async () => {
 		const terminalTool: ToolDefinition = { name: 'runInTerminal', description: 'Run a command', inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } };
-		const { ctx } = await materialize(undefined, undefined, true, [terminalTool]);
-		const options = ctx.sdk.capturedStartupOptions[0];
+		const withTool = await materialize(undefined, undefined, true, [terminalTool]);
+		const withSettingAndTool = await materialize(undefined, undefined, { terminal: true }, [terminalTool]);
+		const withSettingOnly = await materialize(undefined, undefined, { terminal: true });
+		const disallowed = (ctx: ITestContext) => ctx.sdk.capturedStartupOptions[0]?.disallowedTools;
 		assert.deepStrictEqual({
-			disallowedTools: options?.disallowedTools,
-			servers: ['client', 'editor'].filter(name => Object.keys(options?.mcpServers ?? {}).includes(name)),
+			withTool: disallowed(withTool.ctx),
+			withSettingAndTool: disallowed(withSettingAndTool.ctx),
+			withSettingOnly: disallowed(withSettingOnly.ctx),
+			servers: ['client', 'editor'].filter(name => Object.keys(withSettingAndTool.ctx.sdk.capturedStartupOptions[0]?.mcpServers ?? {}).includes(name)),
 		}, {
-			disallowedTools: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+			withTool: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'],
+			withSettingAndTool: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash'],
+			withSettingOnly: ['WebSearch', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'],
 			servers: ['client', 'editor'],
 		});
 	});

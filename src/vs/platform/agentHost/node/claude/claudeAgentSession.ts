@@ -56,7 +56,7 @@ import { ClaudeSdkPipeline, IRematerializer, type ISdkResolvedCustomizations } f
 import { SubagentRegistry } from './claudeSubagentRegistry.js';
 import { getSdkMcpServerEnablement, isCustomizationSdkEligible, resolveCustomizationEnablement } from '../shared/customizationEnablementGate.js';
 import { McpServerType, type IMcpServerConfiguration } from '../../../mcp/common/mcpPlatformTypes.js';
-import { AgentHostClaudeEditorToolsEnabledConfigKey, AgentHostGitHubMcpServerEnabledConfigKey, platformRootSchema } from '../../common/agentHostSchema.js';
+import { AgentHostClaudeEditorTerminalEnabledConfigKey, AgentHostClaudeEditorToolsEnabledConfigKey, AgentHostGitHubMcpServerEnabledConfigKey, platformRootSchema } from '../../common/agentHostSchema.js';
 import { GITHUB_MCP_SERVER_NAME, resolveGitHubMcpServerConfiguration } from '../shared/githubMcpServer.js';
 import { ICopilotApiService } from '../shared/copilotApiService.js';
 import { IAgentHostAuthenticationService } from '../agentHostAuthenticationService.js';
@@ -857,7 +857,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	): Promise<{ mcpServers: Record<string, McpServerConfig> | undefined; deniedMcpServers: readonly ClaudeDeniedMcpServerSpec[]; allowedTools: readonly string[] | undefined; agentMergeRestrictedMcpServerNames: ReadonlySet<string>; editorTerminal: boolean }> {
 		const externalServers = await this._buildExternalMcpServers(await this._getGitHubMcpServerConfiguration(), owner);
 		// Read before `buildClientMcpServers` consumes the diff, so both see the same snapshot of client tools.
-		const editorTerminal = this.toolDiff.model.merged.get().some(tool => tool.name === CLIENT_TERMINAL_TOOL_NAME);
+		const editorTerminal = this._isEditorTerminalEnabled() && this.toolDiff.model.merged.get().some(tool => tool.name === CLIENT_TERMINAL_TOOL_NAME);
 		const clientServers = await buildClientMcpServers(this.toolDiff, this._pendingClientToolCalls, this._sdkService);
 		const serverToolDefinitions = serverToolHost?.getDefinitionsForSession(owner.toString());
 		const serverToolServer = serverToolHost && serverToolDefinitions?.length
@@ -900,6 +900,11 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	 */
 	private _isEditorToolsEnabled(): boolean {
 		return this._configurationService.getRootValue(platformRootSchema, AgentHostClaudeEditorToolsEnabledConfigKey) !== false;
+	}
+
+	/** Whether commands go through the workbench terminal tools instead of the CLI's `Bash`; off by default until the terminal tools render in Claude sessions. */
+	private _isEditorTerminalEnabled(): boolean {
+		return this._configurationService.getRootValue(platformRootSchema, AgentHostClaudeEditorTerminalEnabledConfigKey) === true;
 	}
 
 	/** Where an editor tool's `file_path` points on disk, and whether that is inside the session's working directories. */
