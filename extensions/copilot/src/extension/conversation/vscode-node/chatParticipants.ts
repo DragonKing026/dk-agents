@@ -27,8 +27,16 @@ import { ChatParticipantRequestHandler } from '../../prompt/node/chatParticipant
 import { IFeedbackReporter } from '../../prompt/node/feedbackReporter';
 import { IPromptCategorizerService } from '../../prompt/node/promptCategorizer';
 import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
-import { ChatTitleProvider } from '../../prompt/node/title';
+import { ChatTitleProvider, findModelByIdentifier } from '../../prompt/node/title';
 import { IUserFeedbackService } from './userActions';
+
+async function resolveLanguageModelByIdentifier(modelIdentifier: string): Promise<vscode.LanguageModelChat | undefined> {
+	const vendor = modelIdentifier.substring(0, modelIdentifier.indexOf('/'));
+	if (!vendor) {
+		return undefined;
+	}
+	return findModelByIdentifier(await vscode.lm.selectChatModels({ vendor }), modelIdentifier);
+}
 
 export class ChatAgentService implements IChatAgentService {
 	declare readonly _serviceBrand: undefined;
@@ -134,7 +142,7 @@ class ChatAgents implements IDisposable {
 	private registerEditingAgent(): IDisposable {
 		const editingAgent = this.createAgent(editingSessionAgentName, Intent.Edit);
 		editingAgent.iconPath = new vscode.ThemeIcon('copilot');
-		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
+		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider, resolveLanguageModelByIdentifier);
 		return editingAgent;
 	}
 
@@ -147,7 +155,7 @@ class ChatAgents implements IDisposable {
 	private registerEditsAgent(): IDisposable {
 		const editingAgent = this.createAgent(editsAgentName, Intent.Agent);
 		editingAgent.iconPath = new vscode.ThemeIcon('tools');
-		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
+		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider, resolveLanguageModelByIdentifier);
 		return editingAgent;
 	}
 
@@ -178,7 +186,7 @@ Learn more about [GitHub Copilot](https://docs.github.com/copilot/using-github-c
 		markdownString.isTrusted = { enabledCommands: ['inlineChat.start'] };
 		defaultAgent.helpTextPostfix = markdownString;
 
-		defaultAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
+		defaultAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider, resolveLanguageModelByIdentifier);
 		defaultAgent.summarizer = this.instantiationService.createInstance(ChatSummarizerProvider);
 
 		return defaultAgent;
