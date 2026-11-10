@@ -52,6 +52,23 @@ export class ClientToolSetsContribution extends Disposable implements IWorkbench
 			}));
 		}
 
+		if (!workspaceService.isSessionsWindow) {
+			// Published to agent sessions that run commands through the editor terminal
+			// (Claude sessions have their built-in Bash tool turned off).
+			this._register(this._registerDynamicToolSet(toolsService, {
+				id: 'vscode-terminal',
+				referenceName: 'vscodeTerminal',
+				icon: Codicon.terminal,
+				description: localize('clientToolSet.terminal.description', "Terminal"),
+				detail: localize('clientToolSet.terminal.detail', "Run commands in the integrated terminal, read their output, and stop them."),
+				members: [
+					'runInTerminal',
+					'getTerminalOutput',
+					'killTerminal',
+				],
+			}));
+		}
+
 		if (workspaceService.isSessionsWindow) {
 			this._register(this._registerDynamicToolSet(toolsService, {
 				id: 'vscode-remote-sessions',

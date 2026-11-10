@@ -60,6 +60,38 @@ suite('ToolSetsContribution', () => {
 		});
 	});
 
+	test('ClientToolSetsContribution publishes the terminal tools as a vscode-terminal set outside the Sessions window', () => {
+		const makeTool = (name: string): IToolData => ({
+			id: name,
+			modelDescription: name,
+			displayName: name,
+			toolReferenceName: name,
+			source: ToolDataSource.Internal,
+		});
+		const createContribution = (isSessionsWindow: boolean) => {
+			const toolsService = createToolsService();
+			for (const tool of ['runInTerminal', 'getTerminalOutput', 'killTerminal', 'sendToTerminal'].map(makeTool)) {
+				store.add(toolsService.registerToolData(tool));
+			}
+			const workspaceService = new class extends mock<IAICustomizationWorkspaceService>() {
+				override readonly isSessionsWindow = isSessionsWindow;
+			}();
+			store.add(new ClientToolSetsContribution(toolsService, workspaceService));
+			return toolsService;
+		};
+
+		const sessionsToolsService = createContribution(true);
+		const coreToolsService = createContribution(false);
+
+		assert.deepStrictEqual({
+			sessionsSet: sessionsToolsService.getToolSet('vscode-terminal') !== undefined,
+			coreMembers: Array.from(coreToolsService.getToolSet('vscode-terminal')?.getTools() ?? [], tool => tool.toolReferenceName),
+		}, {
+			sessionsSet: false,
+			coreMembers: ['runInTerminal', 'getTerminalOutput', 'killTerminal'],
+		});
+	});
+
 	test('ClientToolSetsContribution exposes Automations only in the Sessions window', () => {
 		const makeTool = (name: string): IToolData => ({
 			id: name,
