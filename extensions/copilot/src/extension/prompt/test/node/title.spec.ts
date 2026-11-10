@@ -40,6 +40,19 @@ describe('findModelByIdentifier', () => {
 			findModelByIdentifier(models, 'azure/gpt-oss:20b'),
 		]).toEqual([ollama, ollama, undefined, undefined, undefined]);
 	});
+
+	it('prefers the exact id when an id contains a slash, and refuses an ambiguous tail', () => {
+		const short = model('ollama', 'model:q4');
+		const long = model('ollama', 'hf.co/user/model:q4');
+		const groupedA = model('v', 'x');
+		const groupedB = model('v', 'x');
+		expect([
+			findModelByIdentifier([short, long], 'ollama/hf.co/user/model:q4'),
+			findModelByIdentifier([short, long], 'ollama/model:q4'),
+			findModelByIdentifier([groupedA, groupedB], 'v/A/x'),
+			findModelByIdentifier([groupedA], 'v/A/x'),
+		]).toEqual([long, short, undefined, groupedA]);
+	});
 });
 
 describe('ChatTitleProvider', () => {
@@ -69,10 +82,11 @@ describe('ChatTitleProvider', () => {
 		expect({ title, calls }).toEqual({ title: 'A title', calls: [byok, 'copilot-utility-small'] });
 	});
 
-	it('only asks for the utility endpoint without a model id', async () => {
+	it('only asks for the utility endpoint without a model id or with a Copilot model', async () => {
 		const resolve = vi.fn(async () => byok);
 		await provider(resolve).provideChatTitle(context(undefined), token);
-		expect({ calls, resolved: resolve.mock.calls.length }).toEqual({ calls: ['copilot-utility-small'], resolved: 0 });
+		await provider(resolve).provideChatTitle(context('copilot/gpt-4.1'), token);
+		expect({ calls, resolved: resolve.mock.calls.length }).toEqual({ calls: ['copilot-utility-small', 'copilot-utility-small'], resolved: 0 });
 	});
 
 	it('ignores an unknown model id and a failing resolver', async () => {

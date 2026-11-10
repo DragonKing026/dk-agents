@@ -39,7 +39,9 @@ export class ChatTitleProvider implements vscode.ChatTitleProvider {
 	 * records it exactly like the main request does, which keeps the utility model settings working.
 	 */
 	private async registerRequestModel(modelIdentifier: string | undefined): Promise<void> {
-		if (!modelIdentifier || !this.resolveLanguageModel) {
+		// A Copilot model resolves to the utility models anyway; registering it
+		// would only cost a model fetch.
+		if (!modelIdentifier || !this.resolveLanguageModel || modelIdentifier.startsWith('copilot/')) {
 			return;
 		}
 		try {
@@ -130,5 +132,14 @@ export function findModelByIdentifier(models: readonly vscode.LanguageModelChat[
 	}
 	const vendor = modelIdentifier.substring(0, slash);
 	const rest = modelIdentifier.substring(slash + 1);
-	return models.find(m => m.vendor === vendor && (m.id === rest || rest.endsWith('/' + m.id)));
+	const ofVendor = models.filter(m => m.vendor === vendor);
+	// `vendor/id` first; a model id may itself contain `/`.
+	const exact = ofVendor.filter(m => m.id === rest);
+	if (exact.length === 1) {
+		return exact[0];
+	}
+	// `vendor/group/id`: the id is the tail. Only an unambiguous match counts,
+	// never a guess between models that share an id across groups.
+	const byTail = ofVendor.filter(m => rest.endsWith('/' + m.id));
+	return byTail.length === 1 ? byTail[0] : undefined;
 }
