@@ -528,6 +528,7 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 			state,
 			new NullLogService(),
 			resolver,
+			clientTools,
 		);
 
 		assert.deepStrictEqual([...start, ...delta, ...ready], [
@@ -554,7 +555,7 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 				resource: SESSION,
 				action: chatToolCallReady(TURN_ID, 'tu_term', 'runInTerminal', {
 					toolInput: '{\n  "command": "python3 app.py",\n  "mode": "sync"\n}',
-					confirmed: ToolCallConfirmationReason.NotNeeded,
+					contributor: { kind: ToolCallContributorKind.Client, clientId: 'client-1' },
 					_meta: terminalMeta,
 				}),
 			},
@@ -592,6 +593,7 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 			state,
 			new NullLogService(),
 			resolver,
+			clientTools,
 		);
 		const complete = mapSDKMessageToAgentSignals(
 			makeUserToolResultMessage(SESSION_ID, 'tu_client_write', 'done'),
@@ -621,7 +623,7 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 			{
 				kind: 'action',
 				resource: SESSION,
-				action: chatToolCallReady(TURN_ID, 'tu_client_write', 'Write', { toolInput: '{\n  "value": "client input"\n}', confirmed: ToolCallConfirmationReason.NotNeeded }),
+				action: chatToolCallReady(TURN_ID, 'tu_client_write', 'Write', { toolInput: '{\n  "value": "client input"\n}', contributor: { kind: ToolCallContributorKind.Client, clientId: 'client-1' } }),
 			},
 			{
 				kind: 'action',
@@ -638,6 +640,38 @@ suite('claudeMapSessionEvents — direct mapper tests', () => {
 				},
 			},
 		]);
+	});
+
+	test('a client tool is left unconfirmed so its client asks the user, while other tools stay confirmed', () => {
+		const clientTools = new SessionClientToolsModel();
+		clientTools.setTools('client-1', [{ name: 'runInTerminal', inputSchema: { type: 'object' } }]);
+		const readyFor = (toolName: string, toolUseId: string, tools: SessionClientToolsModel | undefined) => {
+			const state = new ClaudeMapperState();
+			const resolver = r();
+			mapSDKMessageToAgentSignals(makeStreamEvent(SESSION_ID, makeContentBlockStartToolUse(0, toolUseId, toolName)), SESSION, TURN_ID, state, new NullLogService(), resolver, tools);
+			mapSDKMessageToAgentSignals(makeStreamEvent(SESSION_ID, makeInputJsonDelta(0, '{"command":"ls"}')), SESSION, TURN_ID, state, new NullLogService(), resolver, tools);
+			const signals = mapSDKMessageToAgentSignals(makeStreamEvent(SESSION_ID, makeContentBlockStop(0)), SESSION, TURN_ID, state, new NullLogService(), resolver, tools);
+			assert.strictEqual(signals.length, 1);
+			const signal = signals[0];
+			assert.ok(signal.kind === 'action' && signal.action.type === ActionType.ChatToolCallReady);
+			return signal.action;
+		};
+
+		const client = readyFor('mcp__client__runInTerminal', 'tu_client', clientTools);
+		assert.strictEqual(client.confirmed, undefined);
+		assert.deepStrictEqual(client.contributor, { kind: ToolCallContributorKind.Client, clientId: 'client-1' });
+
+		for (const [toolName, id, tools] of [
+			['Bash', 'tu_bash', clientTools],
+			['mcp__editor__Edit', 'tu_editor', clientTools],
+			['mcp__host__something', 'tu_host', clientTools],
+			// A client tool nobody owns has no client to ask, so it is not left waiting.
+			['mcp__client__orphan', 'tu_orphan', undefined],
+		] as const) {
+			const other = readyFor(toolName, id, tools);
+			assert.strictEqual(other.confirmed, ToolCallConfirmationReason.NotNeeded, toolName);
+			assert.strictEqual(other.contributor, undefined, toolName);
+		}
 	});
 
 	test('Test 9.5 — content_block_stop emits ChatToolCallReady so auto-allowed tools leave Streaming', () => {

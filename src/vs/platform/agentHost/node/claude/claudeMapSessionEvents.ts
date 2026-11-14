@@ -757,6 +757,11 @@ function mapStreamEvent(
 			if (finalStreamingUpdate) {
 				signals.push(fileEditToolDelta(chat, turnId, tracked.toolUseId, finalStreamingUpdate.invocationMessage));
 			}
+			// The CLI never asks `canUseTool` about its in-process MCP tools, so a
+			// client tool is not confirmed here: leaving `confirmed` unset keeps it
+			// pending, and the client that owns the tool asks the user (and applies
+			// its own auto-approval rules) before running it.
+			const toolClientId = tracked.isClientTool ? clientTools?.ownerOf(tracked.toolName) : undefined;
 			signals.push({
 				kind: 'action',
 				resource: chat,
@@ -766,7 +771,9 @@ function mapStreamEvent(
 					toolCallId: tracked.toolUseId,
 					invocationMessage: info.invocationMessage,
 					...(info.toolInput !== undefined ? { toolInput: info.toolInput } : {}),
-					confirmed: ToolCallConfirmationReason.NotNeeded,
+					...(toolClientId
+						? { contributor: { kind: ToolCallContributorKind.Client, clientId: toolClientId } }
+						: { confirmed: ToolCallConfirmationReason.NotNeeded }),
 					...(meta ? { _meta: meta } : {}),
 				},
 			});

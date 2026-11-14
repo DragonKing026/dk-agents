@@ -299,7 +299,10 @@ export function emitInnerAssistantSignals(
 					toolCallId: block.id,
 					invocationMessage: isClientTool ? displayName : getClaudeInvocationMessage(toolName, displayName, block.input),
 					...(toolInputStr !== undefined ? { toolInput: toolInputStr } : {}),
-					confirmed: ToolCallConfirmationReason.NotNeeded,
+					// A client tool is confirmed by its client, not here (see the stream mapper).
+					...(clientId
+						? { contributor: { kind: ToolCallContributorKind.Client, clientId } }
+						: { confirmed: ToolCallConfirmationReason.NotNeeded }),
 				},
 			});
 			continue;
