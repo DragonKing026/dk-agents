@@ -3140,6 +3140,19 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 				}
 				const targetsConfirmation = initial.toolCall.status === ToolCallStatus.PendingConfirmation;
 				requestLifecycle.value = toDisposable(() => {
+					// A provider can move one tool call from one blocker to another
+					// (a `running` call that is then asked for permission turns its
+					// execution request into a confirmation request, which has a
+					// different id). The call is still outstanding, so hand the
+					// execution over to the request that replaces this one instead
+					// of cancelling it.
+					const continuesUnderOtherRequest = requests.get().some(candidate =>
+						this._isOwnedClientToolRequest(candidate)
+						&& candidate.id !== initial.id
+						&& this._toolCallKey(candidate.chat.toString(), candidate.turnId, candidate.toolCall.toolCallId) === key);
+					if (continuesUnderOtherRequest) {
+						return;
+					}
 					const state = this._clientToolInvocations.get(key)?.state.get();
 					const targetsState = state?.type === IChatToolInvocation.StateKind.Streaming
 						|| state?.type === (targetsConfirmation
@@ -3476,8 +3489,15 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			error = err;
 		}
 
-		if (!isCurrent() || token.isCancellationRequested || invocation.state.get().type === IChatToolInvocation.StateKind.Cancelled) {
+		if (!isCurrent() || invocation.state.get().type === IChatToolInvocation.StateKind.Cancelled) {
 			return;
+		}
+		if (token.isCancellationRequested) {
+			// The call is still current, so nobody else will settle it: returning
+			// silently would leave the provider waiting for a completion that
+			// never comes. Report the cancellation (a call the host has already
+			// settled ignores it).
+			this._logService.trace(`[AgentHost] Client tool was cancelled while still current: ${toolName} (callId=${toolCall.toolCallId})`);
 		}
 		if (error !== undefined) {
 			if (!isCancellationError(error)) {

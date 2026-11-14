@@ -6,6 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import {
+	CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE,
 	CLAUDE_PLAN_DECLINED_MESSAGE,
 	CLAUDE_QUESTION_CANCELLED_MESSAGE,
 	CLAUDE_USER_DECLINED_MESSAGE,
@@ -24,6 +25,7 @@ suite('claudeToolDenial', () => {
 			userDeclined: claudeToolDenialCode(CLAUDE_USER_DECLINED_MESSAGE),
 			planDeclined: claudeToolDenialCode(CLAUDE_PLAN_DECLINED_MESSAGE),
 			questionCancelled: claudeToolDenialCode(CLAUDE_QUESTION_CANCELLED_MESSAGE),
+			clientToolCancelled: claudeToolDenialCode(CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE),
 			genuineError: claudeToolDenialCode('permission denied'),
 			empty: claudeToolDenialCode(''),
 		};
@@ -31,6 +33,7 @@ suite('claudeToolDenial', () => {
 			userDeclined: 'denied',
 			planDeclined: 'denied',
 			questionCancelled: 'cancelled',
+			clientToolCancelled: 'cancelled',
 			genuineError: undefined,
 			empty: undefined,
 		});

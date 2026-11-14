@@ -25,7 +25,7 @@ import {
 import { buildSubagentSessionUri } from '../../common/state/sessionState.js';
 import { readToolCallMeta } from '../../common/meta/agentToolCallMeta.js';
 import { formatGenericToolInput } from '../../common/streamingToolCallDisplay.js';
-import { buildClaudeToolMeta, getClaudeInvocationMessage, getClaudePastTenseMessage, getClaudeToolDisplayName, getClaudeToolInputString } from './claudeToolDisplay.js';
+import { buildClaudeClientToolMeta, buildClaudeToolMeta, getClaudeInvocationMessage, getClaudePastTenseMessage, getClaudeToolDisplayName, getClaudeToolInputString } from './claudeToolDisplay.js';
 import { hasClientToolNamePrefix, stripClientToolNamePrefix } from './clientTools/claudeClientToolMcpServer.js';
 
 /**
@@ -392,7 +392,7 @@ class ReplayBuilder {
 		}
 		const displayName = isClientTool ? toolName : getClaudeToolDisplayName(toolName);
 		const parsedInput = input !== null && typeof input === 'object' ? input as Record<string, unknown> : undefined;
-		const meta = isClientTool ? undefined : buildClaudeToolMeta(toolName);
+		const meta = isClientTool ? buildClaudeClientToolMeta(toolName) : buildClaudeToolMeta(toolName);
 		// Build a placeholder Cancelled state by default; replaced with Completed when the tool_result lands.
 		const placeholder: ToolCallCancelledState = {
 			status: ToolCallStatus.Cancelled,

@@ -15,6 +15,9 @@ export const CLAUDE_PLAN_MODE_EDIT_MESSAGE = 'Plan mode is active: files in the 
 /** Deny `message` when the user cancels an `AskUserQuestion` prompt. */
 export const CLAUDE_QUESTION_CANCELLED_MESSAGE = 'The user cancelled the question';
 
+/** Result text of a client tool that was still waiting when its turn was cancelled. */
+export const CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE = 'The turn was cancelled before the tool finished';
+
 /**
  * Classifies a failed tool's result message into a `languageModelToolInvoked`
  * cancellation code (`denied`/`cancelled`), or `undefined` for a genuine tool
@@ -28,6 +31,7 @@ export function claudeToolDenialCode(message: string): 'denied' | 'cancelled' | 
 		case CLAUDE_PLAN_DECLINED_MESSAGE:
 			return 'denied';
 		case CLAUDE_QUESTION_CANCELLED_MESSAGE:
+		case CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE:
 			return 'cancelled';
 		default:
 			return undefined;

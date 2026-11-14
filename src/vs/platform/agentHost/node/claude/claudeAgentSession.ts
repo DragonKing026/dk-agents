@@ -26,7 +26,7 @@ import { PendingRequestRegistry } from '../../common/pendingRequestRegistry.js';
 import { ISessionDatabase, ISessionDataService } from '../../common/sessionDataService.js';
 import { ActionType } from '../../common/state/sessionActions.js';
 import { areAdditionalWorkingDirectoriesEqual, areSessionWorkingDirectoriesEqual } from '../../common/state/sessionWorkingDirectories.js';
-import { PendingMessage, ChatInputAnswer, ChatInputRequest, ChatInputResponseKind, ToolCallContributorKind, ToolCallPendingConfirmationState, type AgentSelection, type ModelSelection, type ToolDefinition } from '../../common/state/protocol/state.js';
+import { PendingMessage, ChatInputAnswer, ChatInputRequest, ChatInputResponseKind, ToolCallConfirmationReason, ToolCallContributorKind, ToolCallPendingConfirmationState, type AgentSelection, type ModelSelection, type ToolDefinition } from '../../common/state/protocol/state.js';
 import type { ClientPluginCustomization, CustomizationEnablement } from '../../common/state/protocol/channels-session/state.js';
 import { CustomizationType, type Customization, type ToolCallResult } from '../../common/state/sessionState.js';
 import { IClaudeAgentSdkService } from './claudeAgentSdkService.js';
@@ -34,6 +34,7 @@ import { buildClientMcpServers, buildOptions, toClaudeMcpServers, type ClaudeDen
 import { claudeTransportForProvider, parseClaudeModelSelection, toClaudeSdkModelId } from './claudeModelSelection.js';
 import { buildEditorToolMcpServer, CLAUDE_EDITOR_TOOL_MCP_SERVER_NAME, ClaudeEditSnapshotBridge, resolveClaudeEditorPathOnDisk, type IResolvedClaudeEditorPath } from './claudeEditorToolMcpServer.js';
 import { buildServerToolMcpServer, CLAUDE_SERVER_TOOL_MCP_SERVER_NAME, serverToolAllowList } from './claudeServerToolMcpServer.js';
+import { CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE, CLAUDE_USER_DECLINED_MESSAGE } from './claudeToolDenial.js';
 import { convertToolCallResult } from './clientTools/claudeClientToolResult.js';
 import { readClaudePermissionMode } from './claudeSessionPermissionMode.js';
 import { SessionClientToolsDiff } from './clientTools/claudeSessionClientToolsModel.js';
@@ -424,6 +425,41 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	}
 
 	/**
+	 * The CLI runs a client tool (`mcp__client__*`) without asking `canUseTool`, so
+	 * the mapper leaves such a call unconfirmed and the client asks the user. Ids of
+	 * the client tool calls still waiting for their client; a result or a denial for
+	 * one of them is kept if the CLI has not yet called the tool handler.
+	 */
+	private readonly _clientToolCalls = new Set<string>();
+
+	/**
+	 * Tracks client tool calls as they start and, under `bypassPermissions`, confirms
+	 * them as the CLI does for its own tools (nothing asked); otherwise the client asks.
+	 */
+	private _enrichSignalWithClientToolConfirmation(signal: AgentSignal): AgentSignal {
+		if (signal.kind !== 'action') {
+			return signal;
+		}
+		const action = signal.action;
+		if (action.type === ActionType.ChatTurnComplete || action.type === ActionType.ChatTurnCancelled || action.type === ActionType.ChatError) {
+			// The turn is over: nothing will ask for these calls any more.
+			this._settleClientToolCalls(false);
+			return signal;
+		}
+		if (action.type === ActionType.ChatToolCallStart && action.contributor?.kind === ToolCallContributorKind.Client) {
+			this._clientToolCalls.add(action.toolCallId);
+			return signal;
+		}
+		if (action.type === ActionType.ChatToolCallReady
+			&& action.confirmed === undefined
+			&& action.contributor?.kind === ToolCallContributorKind.Client
+			&& this.getPermissionMode(this._owner.get()) === 'bypassPermissions') {
+			return { ...signal, action: { ...action, confirmed: ToolCallConfirmationReason.NotNeeded } };
+		}
+		return signal;
+	}
+
+	/**
 	 * Stamps the MCP {@link ToolCallContributor} onto a `ChatToolCallStart` for
 	 * an external `mcp__<server>__<tool>` call, resolved from this session's
 	 * cached customization snapshot. Owned here because the session owns the
@@ -710,7 +746,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 			await warm[Symbol.asyncDispose]();
 			throw err;
 		}
-		this._register(pipeline.onDidProduceSignal(s => this._onDidSessionProgress.fire(this._enrichSignalWithMcpContributor(this._enrichSignalWithCredits(s)))));
+		this._register(pipeline.onDidProduceSignal(s => this._onDidSessionProgress.fire(this._enrichSignalWithClientToolConfirmation(this._enrichSignalWithMcpContributor(this._enrichSignalWithCredits(s))))));
 		this._pipeline = pipeline;
 		this._register(this._configurationService.onDidChatConfigChange(event => {
 			if (!event.origin || event.chat !== this._chatChannelUri.toString()) {
@@ -1186,6 +1222,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	 * resolved server-side entries from the rebuilt `Query`.
 	 */
 	private async _rebindForSyncedState(): Promise<void> {
+		this._clientToolCalls.clear();
 		this._pendingClientToolCalls.rejectAll(new CancellationError());
 		await this._requirePipeline().rebindForRestart();
 		this._onDidCustomizationsChange.fire();
@@ -1201,7 +1238,30 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	abort(): void {
 		this._pendingPermissions.denyAll(false);
 		this._pendingUserInputs.denyAll({ response: ChatInputResponseKind.Cancel });
+		this._settleClientToolCalls(true);
 		this._requirePipeline().abort();
+	}
+
+	/**
+	 * Settle every client tool call still waiting for its client, so no handler is
+	 * left parked. With `keepForLateHandler` a call whose handler the CLI has not
+	 * reached yet also gets the cancelled result kept, so a handler registered
+	 * after a Stop does not hang. Such entries stay until the next rebind or
+	 * dispose clears the registry; there is at most one per call of the cancelled turn.
+	 */
+	private _settleClientToolCalls(keepForLateHandler: boolean): void {
+		const result: CallToolResult = {
+			content: [{ type: 'text', text: CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE }],
+			isError: true,
+		};
+		const notParked = [...this._clientToolCalls].filter(id => !this._pendingClientToolCalls.has(id));
+		this._clientToolCalls.clear();
+		this._pendingClientToolCalls.denyAll(result);
+		if (keepForLateHandler) {
+			for (const id of notParked) {
+				this._pendingClientToolCalls.respondOrBuffer(id, result);
+			}
+		}
 	}
 
 	/**
@@ -1382,7 +1442,26 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	}
 
 	respondToPermissionRequest(requestId: string, approved: boolean): boolean {
-		return this._pendingPermissions.respond(requestId, approved);
+		if (this._pendingPermissions.respond(requestId, approved)) {
+			return true;
+		}
+		// A client tool was never parked on `canUseTool`: its client answers the
+		// confirmation. An approval needs nothing here (the client then runs the
+		// tool and reports its result); a denial has to reach the waiting handler,
+		// or the CLI would wait for a result that never comes.
+		if (!this._clientToolCalls.has(requestId)) {
+			return false;
+		}
+		if (approved) {
+			this._logService.trace(`[Claude:${this.sessionId}] Client tool call approved by its client: ${requestId}`);
+			return true;
+		}
+		this._clientToolCalls.delete(requestId);
+		this._pendingClientToolCalls.respondOrBuffer(requestId, {
+			content: [{ type: 'text', text: CLAUDE_USER_DECLINED_MESSAGE }],
+			isError: true,
+		});
+		return true;
 	}
 
 	/**
@@ -1451,6 +1530,12 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	 */
 	completeClientToolCall(toolCallId: string, result: ToolCallResult): boolean {
 		const converted = convertToolCallResult(result, toolCallId);
+		// The client can answer before the CLI has called the tool handler, so a
+		// result for a known client tool call is kept until the handler asks.
+		if (this._clientToolCalls.delete(toolCallId)) {
+			this._pendingClientToolCalls.respondOrBuffer(toolCallId, converted);
+			return true;
+		}
 		return this._pendingClientToolCalls.respond(toolCallId, converted);
 	}
 
@@ -1721,6 +1806,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 		// SDK's canUseTool callback unwinds with a deny and the loop exits.
 		this._pendingPermissions.denyAll(false);
 		this._pendingUserInputs.denyAll({ response: ChatInputResponseKind.Cancel });
+		this._clientToolCalls.clear();
 		this._pendingClientToolCalls.rejectAll(new CancellationError());
 		super.dispose();
 	}

@@ -20,6 +20,7 @@ import {
 	makeContentBlockStartThinking,
 	makeContentBlockStartToolUse,
 	makeContentBlockStop,
+	makeInputJsonDelta,
 	makeMessageStart,
 	makeMessageStop,
 	makeResultSuccess,
@@ -62,7 +63,7 @@ import { McpServerStatus as McpCustomizationServerStatus, type ChildCustomizatio
 import { buildNonPtyShellTerminalUri } from '../../common/nonPtyShellTerminalUri.js';
 import { ISessionDataService } from '../../common/sessionDataService.js';
 import { AHP_AUTH_REQUIRED, ProtocolError } from '../../common/state/sessionProtocol.js';
-import { ChatOriginKind, CustomizationEnablementKind, ProtectedResourceMetadata, ChatInputAnswerState, ChatInputAnswerValueKind, ToolCallStatus, type SessionConfigState, type ChatInputRequest, type ToolDefinition } from '../../common/state/protocol/state.js';
+import { ChatOriginKind, CustomizationEnablementKind, ToolCallConfirmationReason, ToolCallContributorKind, ProtectedResourceMetadata, ChatInputAnswerState, ChatInputAnswerValueKind, ToolCallStatus, type ToolCallResult, type SessionConfigState, type ChatInputRequest, type ToolDefinition } from '../../common/state/protocol/state.js';
 import { SessionServerToolName } from '../../common/serverToolNames.js';
 import { serverToolAllowList } from '../../node/claude/claudeServerToolMcpServer.js';
 import { moveSessionToolDefinition } from '../../node/shared/sessionMoveTools.js';
@@ -6106,6 +6107,121 @@ suite('ClaudeAgent', () => {
 		const session = agent.getSessionForTesting(created.session)!;
 		const settled = session.completeClientToolCall('tu_unknown', { success: true, pastTenseMessage: 'ok', content: [{ type: ToolResultContentType.Text, text: 'hello' }] });
 		assert.strictEqual(settled, false, 'no parked handler in this test path; unknown id is silent');
+	});
+
+	suite('client tool confirmation', () => {
+
+		const TOOL_USE_ID = 'tu_client';
+		const completion: ToolCallResult = { success: true, pastTenseMessage: 'ran', content: [{ type: ToolResultContentType.Text, text: 'hello' }] };
+
+		/** Starts a turn in which the model calls the client tool `echo`; the CLI has not called the tool handler yet and the turn stays open until `endTurn`. */
+		async function startClientToolCall(config?: Record<string, unknown>) {
+			const { agent, sdk } = createTestContext(disposables);
+			await agent.authenticate(GITHUB_COPILOT_PROTECTED_RESOURCE.resource, 'tok');
+			const created = await createSession(agent, { workingDirectories: [URI.file('/work')], ...(config ? { config } : {}) });
+			const sessionId = created.sdkSessionId;
+			const chat = defaultChatUri(created.session);
+			getOrCreateActiveClient(agent, chat, 'c1').tools = [{ name: 'echo', inputSchema: { type: 'object' } }];
+			sdk.nextQueryMessages = [
+				makeSystemInitMessage(sessionId),
+				makeStreamEvent(sessionId, makeMessageStart()),
+				makeStreamEvent(sessionId, makeContentBlockStartToolUse(0, TOOL_USE_ID, 'mcp__client__echo')),
+				makeStreamEvent(sessionId, makeInputJsonDelta(0, '{}')),
+				makeStreamEvent(sessionId, makeContentBlockStop(0)),
+				makeStreamEvent(sessionId, makeMessageStop()),
+				makeResultSuccess(sessionId),
+			];
+			const reached = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			sdk.queryAdvance = async (i: number) => {
+				if (i === 6) {
+					reached.complete();
+					await release.p;
+				}
+			};
+			const signals: AgentSignal[] = [];
+			disposables.add(agent.onDidChatProgress(s => signals.push(s)));
+			const turn = agent.chats.sendMessage(chat, 'go', undefined, undefined, 'turn-1', undefined, undefined, chatContext(chat));
+			await reached.p;
+			const endTurn = async () => { release.complete(); await turn; };
+			const callHandler = () => sdk.toolHandlers.get('echo')!({}, { _meta: { 'claudecode/toolUseId': TOOL_USE_ID } });
+			const ready = signals.flatMap(s => s.kind === 'action' && s.action.type === ActionType.ChatToolCallReady ? [s.action] : []);
+			return { agent, chat, session: agent.getSessionForTesting(created.session)!, ready, callHandler, endTurn };
+		}
+
+		test('the client tool is left for its client to confirm', async () => {
+			const { ready } = await startClientToolCall();
+			assert.deepStrictEqual(ready.map(r => ({ confirmed: r.confirmed, contributor: r.contributor })), [
+				{ confirmed: undefined, contributor: { kind: ToolCallContributorKind.Client, clientId: 'c1' } },
+			]);
+		});
+
+		test('bypassPermissions confirms the client tool without asking', async () => {
+			const { ready } = await startClientToolCall({ permissionMode: 'bypassPermissions' });
+			assert.deepStrictEqual(ready.map(r => r.confirmed), [ToolCallConfirmationReason.NotNeeded]);
+		});
+
+		test('an approved call returns the client result to the CLI', async () => {
+			const { agent, chat, callHandler } = await startClientToolCall();
+			const result = callHandler();
+			agent.respondToPermissionRequest(TOOL_USE_ID, true);
+			agent.onClientToolCallComplete(chat, TOOL_USE_ID, completion);
+			assert.deepStrictEqual(await result, { content: [{ type: 'text', text: 'hello' }] });
+		});
+
+		test('a result that arrives before the CLI calls the tool is kept', async () => {
+			const { agent, chat, callHandler } = await startClientToolCall();
+			agent.onClientToolCallComplete(chat, TOOL_USE_ID, completion);
+			assert.deepStrictEqual(await callHandler(), { content: [{ type: 'text', text: 'hello' }] });
+		});
+
+		test('a denial while the CLI waits returns a declined result', async () => {
+			const { agent, callHandler } = await startClientToolCall();
+			const result = callHandler();
+			agent.respondToPermissionRequest(TOOL_USE_ID, false);
+			assert.deepStrictEqual(await result, { content: [{ type: 'text', text: 'User declined' }], isError: true });
+		});
+
+		test('a denial that arrives before the CLI calls the tool is kept', async () => {
+			const { agent, callHandler } = await startClientToolCall();
+			agent.respondToPermissionRequest(TOOL_USE_ID, false);
+			assert.deepStrictEqual(await callHandler(), { content: [{ type: 'text', text: 'User declined' }], isError: true });
+		});
+
+		test('a late result after a denial is ignored', async () => {
+			const { agent, chat, session, callHandler } = await startClientToolCall();
+			agent.respondToPermissionRequest(TOOL_USE_ID, false);
+			agent.onClientToolCallComplete(chat, TOOL_USE_ID, completion);
+			await callHandler();
+			assert.strictEqual(session.pendingClientToolCalls.hasBufferedResult(TOOL_USE_ID), false);
+		});
+
+		test('cancelling the turn settles a waiting client tool call', async () => {
+			const { agent, chat, callHandler } = await startClientToolCall();
+			const result = callHandler();
+			await agent.chats.abort(chat, chatContext(chat));
+			assert.deepStrictEqual(await result, { content: [{ type: 'text', text: 'The turn was cancelled before the tool finished' }], isError: true });
+		});
+
+		test('a handler the CLI reaches after a Stop is settled too', async () => {
+			const { agent, chat, callHandler } = await startClientToolCall();
+			await agent.chats.abort(chat, chatContext(chat));
+			assert.deepStrictEqual(await callHandler(), { content: [{ type: 'text', text: 'The turn was cancelled before the tool finished' }], isError: true });
+		});
+
+		test('a result that arrives after the turn ended is not kept', async () => {
+			const { agent, chat, session, endTurn } = await startClientToolCall();
+			await endTurn();
+			agent.onClientToolCallComplete(chat, TOOL_USE_ID, completion);
+			assert.strictEqual(session.pendingClientToolCalls.hasBufferedResult(TOOL_USE_ID), false);
+		});
+
+		test('a confirmation for a call that is not a client tool is not buffered', async () => {
+			const { agent, session } = await startClientToolCall();
+			agent.respondToPermissionRequest('tu_builtin', false);
+			agent.onClientToolCallComplete(defaultChatUri(URI.parse('claude:/none')), 'tu_builtin', completion);
+			assert.strictEqual(session.pendingClientToolCalls.hasBufferedResult('tu_builtin'), false);
+		});
 	});
 
 	test('onClientToolCallComplete walks subagent URIs to the root session', () => {

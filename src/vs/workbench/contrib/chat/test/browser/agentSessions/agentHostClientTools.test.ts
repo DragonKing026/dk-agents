@@ -2661,6 +2661,74 @@ suite('AgentHostClientTools', () => {
 			});
 		});
 
+		test('keeps executing a client tool when the provider turns its execution request into a confirmation request', async () => {
+			// Claude marks a tool `running` as soon as it has streamed in and only
+			// then asks permission, which replaces the execution request by a
+			// confirmation request with another id. The tool call is still
+			// outstanding, so its execution must not be cancelled.
+			const invokeResult = new DeferredPromise<IToolResult>();
+			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [testRunTaskTool], { invokeResult });
+			const sessionResource = URI.parse('agent-host-copilot:/session-1');
+			const backendSession = AgentSession.uri('copilot', 'session-1');
+			const chatURI = URI.parse(buildDefaultChatUri(backendSession.toString()));
+
+			applyReferencedRunTask(connection, chatURI, '{"task":"build"}', ToolCallConfirmationReason.NotNeeded);
+			await handler.provideChatSessionContent(sessionResource, CancellationToken.None);
+			applyRunningClientExecution(connection, chatURI.toString(), 'turn-1', {
+				toolCallId: 'tool-call-1',
+				toolName: 'runTask',
+				displayName: 'Run Task',
+				invocationMessage: 'Run Task',
+				toolInput: '{"task":"build"}',
+			});
+			await timeout(0);
+			assert.strictEqual(toolsService.invokedToolCalls.length, 1);
+
+			// The replacement request appears before the old one is removed.
+			connection.applySessionAction(backendSession, {
+				type: ActionType.SessionInputNeededSet,
+				request: {
+					id: 'confirmation-tool-call-1',
+					kind: SessionInputRequestKind.ToolConfirmation,
+					chat: chatURI.toString(),
+					turnId: 'turn-1',
+					toolCall: {
+						status: ToolCallStatus.PendingConfirmation,
+						toolCallId: 'tool-call-1',
+						toolName: 'runTask',
+						displayName: 'Run Task',
+						invocationMessage: 'Run Task',
+						toolInput: '{"task":"build"}',
+						confirmationTitle: 'Run Task',
+						contributor: { kind: ToolCallContributorKind.Client, clientId: connection.clientId },
+					},
+				},
+			});
+			connection.applySessionAction(backendSession, {
+				type: ActionType.SessionInputNeededRemoved,
+				id: 'exec-tool-call-1',
+			});
+			await timeout(0);
+			await timeout(0);
+
+			assert.deepStrictEqual({
+				cancelled: toolsService.invocationTokens[0]?.isCancellationRequested,
+				invoked: toolsService.invokedToolCalls.length,
+			}, {
+				cancelled: false,
+				invoked: 1,
+			});
+
+			invokeResult.complete({ content: [{ kind: 'text', value: 'done' }] });
+			await timeout(0);
+			await timeout(0);
+
+			assert.strictEqual(connection.dispatchedActions.filter(entry => isChatAction(entry.action)
+				&& entry.action.type === ActionType.ChatToolCallComplete
+				&& entry.action.toolCallId === 'tool-call-1'
+				&& entry.action.result.success).length, 1);
+		});
+
 		test('does not execute a client tool skipped from another client while confirming', async () => {
 			const { handler, connection, toolsService } = createHandlerWithMocks(disposables, [testRunTaskTool], { requireConfirmation: true });
 			const chatURI = await provideSessionWithPendingConfirmationClientTool(handler, connection);
