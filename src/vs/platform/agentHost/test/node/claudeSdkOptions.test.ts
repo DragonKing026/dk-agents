@@ -76,7 +76,7 @@ suite('claudeSdkOptions / buildSubprocessEnv', () => {
 			path: undefined, // not explicitly forwarded; PATH is composed in settingsEnv, not subprocessEnv
 			home: '/Users/test',
 			userProfile: 'C:\\Users\\test',
-			aiAgent: 'github_copilot_vscode_agent',
+			aiAgent: 'dk_code_agent',
 		});
 	});
 
@@ -176,7 +176,7 @@ suite('claudeSdkOptions / buildSubprocessEnv', () => {
 			electronOther: undefined,
 			nodeOptions: undefined,
 			runAsNode: '1',
-			aiAgent: 'github_copilot_vscode_agent',
+			aiAgent: 'dk_code_agent',
 		});
 	});
 });
@@ -381,7 +381,7 @@ suite('claudeSdkOptions / buildOptions plugins projection', () => {
 			baseUrl: 'http://127.0.0.1:0',
 			authToken: 'n.s1',
 			nonessential: '1',
-			aiAgent: 'github_copilot_vscode_agent',
+			aiAgent: 'dk_code_agent',
 		});
 	});
 

@@ -25,7 +25,6 @@ vscode.db
 /.profile-oss
 /cli/target
 /cli/openssl
-/copilot_shim/target
 product.overrides.json
 *.snap.actual
 *.tsbuildinfo

@@ -136,7 +136,6 @@
 		],
 		"chatQuotaExceededContext": "github.copilot.chat.quotaExceeded",
 		"completionsQuotaExceededContext": "github.copilot.completions.quotaExceeded",
-		"walkthroughCommand": "github.copilot.open.walkthrough",
 		"completionsMenuCommand": "github.copilot.toggleStatusMenu",
 		"chatRefreshTokenCommand": "github.copilot.refreshToken",
 		"generateCommitMessageCommand": "github.copilot.git.generateCommitMessage",

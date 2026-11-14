@@ -31,10 +31,6 @@ function packageInnoSetup(iss: string, options: { definitions?: Record<string, u
 		definitions['Debug'] = 'true';
 	}
 
-	if (process.argv.some(arg => arg === '--sign')) {
-		definitions['Sign'] = 'true';
-	}
-
 	const keys = Object.keys(definitions);
 
 	keys.forEach(key => assert(typeof definitions[key] === 'string', `Missing value for '${key}' in Inno Setup package step`));

@@ -18,7 +18,7 @@ import path from 'path';
 // `findMissingNativeOptionalDep` is the reusable primitive that detects this.
 // It is used from two places:
 //   - The CLI entry point below runs after `npm ci` in the node_modules
-//     cache-build jobs (.github/workflows/pr-node-modules.yml) and fails the
+//     cache-build jobs and fails the
 //     job so a poisoned cache is never saved.
 //   - The agent-SDK producer (build/agent-sdk/package.ts) runs it after its
 //     scratch `npm ci` so a binary-less tarball is never built and uploaded to
@@ -54,8 +54,7 @@ export function findMissingNativeOptionalDep(nodeModulesDir: string, basePackage
 
 // #region CLI entry point
 //
-// Runs after the root `npm ci` in the node_modules cache-build jobs (see
-// .github/workflows/pr-node-modules.yml), before the cache is saved. Verifies
+// Runs after the root `npm ci` in the node_modules cache-build jobs, before the cache is saved. Verifies
 // the repo-root node_modules has the per-platform package for the current host
 // so a poisoned cache (base package present, native package silently skipped)
 // is never persisted.

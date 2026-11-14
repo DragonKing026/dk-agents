@@ -14,14 +14,13 @@ import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AccessibilityHelpNLS } from '../../../../editor/common/standaloneStrings.js';
-import { FocusedViewContext, SidebarFocusContext } from '../../../common/contextkeys.js';
+import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { BREAKPOINTS_VIEW_ID, CALLSTACK_VIEW_ID, LOADED_SCRIPTS_VIEW_ID, VARIABLES_VIEW_ID, WATCH_VIEW_ID } from '../common/debug.js';
 
 export class RunAndDebugAccessibilityHelp implements IAccessibleViewImplementation {
 	priority = 120;
 	name = 'runAndDebugHelp';
 	when = ContextKeyExpr.or(
-		ContextKeyExpr.and(ContextKeyExpr.equals('activeViewlet', 'workbench.view.debug'), SidebarFocusContext),
 		ContextKeyExpr.equals(FocusedViewContext.key, VARIABLES_VIEW_ID),
 		ContextKeyExpr.equals(FocusedViewContext.key, WATCH_VIEW_ID),
 		ContextKeyExpr.equals(FocusedViewContext.key, CALLSTACK_VIEW_ID),
@@ -61,14 +60,11 @@ class RunAndDebugAccessibilityHelpProvider extends Disposable implements IAccess
 			case 'Breakpoints':
 				this._commandService.executeCommand('workbench.debug.action.focusBreakpointsView');
 				break;
-			default:
-				this._commandService.executeCommand('workbench.view.debug');
 		}
 	}
 
 	public provideContent(): string {
 		return [
-			localize('debug.showRunAndDebug', "The Show Run and Debug view command{0} will open the current view.", '<keybinding:workbench.view.debug>'),
 			localize('debug.startDebugging', "The Debug: Start Debugging command{0} will start a debug session.", '<keybinding:workbench.action.debug.start>'),
 			localize('debug.help', "Access debug output and evaluate expressions in the debug console, which can be focused with{0}.", '<keybinding:workbench.panel.repl.view.focus>'),
 			AccessibilityHelpNLS.setBreakpoint,
