@@ -3497,7 +3497,7 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			// silently would leave the provider waiting for a completion that
 			// never comes. Report the cancellation (a call the host has already
 			// settled ignores it).
-			this._logService.warn(`[AgentHost] Client tool was cancelled while still current: ${toolName} (callId=${toolCall.toolCallId})`);
+			this._logService.trace(`[AgentHost] Client tool was cancelled while still current: ${toolName} (callId=${toolCall.toolCallId})`);
 		}
 		if (error !== undefined) {
 			if (!isCancellationError(error)) {

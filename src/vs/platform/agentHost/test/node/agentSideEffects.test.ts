@@ -5637,6 +5637,34 @@ suite('AgentSideEffects', () => {
 				{ requestId: 'tc-deny-1', approved: false },
 			]);
 		});
+
+		test('routes the denial of a client tool call left to its client to the agent', () => {
+			setupSession();
+			startTurn('turn-1', defaultChatUri);
+			disposables.add(sideEffects.registerProgressListener(agent));
+
+			const contributor = { kind: ToolCallContributorKind.Client, clientId: 'client-1' } as const;
+			agent.fireProgress({
+				kind: 'action', resource: URI.parse(defaultChatUri),
+				action: chatToolCallStart('turn-1', 'tc-client-1', 'runInTerminal', 'runInTerminal', { contributor }),
+			});
+			agent.fireProgress({
+				kind: 'action', resource: URI.parse(defaultChatUri),
+				action: chatToolCallReady('turn-1', 'tc-client-1', 'runInTerminal', { contributor }),
+			});
+
+			sideEffects.handleAction(defaultChatUri, {
+				type: ActionType.ChatToolCallConfirmed,
+				turnId: 'turn-1',
+				toolCallId: 'tc-client-1',
+				approved: false,
+				reason: 'denied' as const,
+			} as ChatAction);
+
+			assert.deepStrictEqual(agent.respondToPermissionCalls, [
+				{ requestId: 'tc-client-1', approved: false },
+			]);
+		});
 	});
 
 	// ---- tool_ready progress dispatch -----------------------------------

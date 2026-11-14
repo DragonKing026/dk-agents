@@ -6114,7 +6114,7 @@ suite('ClaudeAgent', () => {
 		const TOOL_USE_ID = 'tu_client';
 		const completion: ToolCallResult = { success: true, pastTenseMessage: 'ran', content: [{ type: ToolResultContentType.Text, text: 'hello' }] };
 
-		/** Runs one turn in which the model calls the client tool `echo`; the CLI has not called the tool handler yet. */
+		/** Starts a turn in which the model calls the client tool `echo`; the CLI has not called the tool handler yet and the turn stays open until `endTurn`. */
 		async function startClientToolCall(config?: Record<string, unknown>) {
 			const { agent, sdk } = createTestContext(disposables);
 			await agent.authenticate(GITHUB_COPILOT_PROTECTED_RESOURCE.resource, 'tok');
@@ -6131,12 +6131,22 @@ suite('ClaudeAgent', () => {
 				makeStreamEvent(sessionId, makeMessageStop()),
 				makeResultSuccess(sessionId),
 			];
+			const reached = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			sdk.queryAdvance = async (i: number) => {
+				if (i === 6) {
+					reached.complete();
+					await release.p;
+				}
+			};
 			const signals: AgentSignal[] = [];
 			disposables.add(agent.onDidChatProgress(s => signals.push(s)));
-			await agent.chats.sendMessage(chat, 'go', undefined, undefined, 'turn-1', undefined, undefined, chatContext(chat));
+			const turn = agent.chats.sendMessage(chat, 'go', undefined, undefined, 'turn-1', undefined, undefined, chatContext(chat));
+			await reached.p;
+			const endTurn = async () => { release.complete(); await turn; };
 			const callHandler = () => sdk.toolHandlers.get('echo')!({}, { _meta: { 'claudecode/toolUseId': TOOL_USE_ID } });
 			const ready = signals.flatMap(s => s.kind === 'action' && s.action.type === ActionType.ChatToolCallReady ? [s.action] : []);
-			return { agent, chat, session: agent.getSessionForTesting(created.session)!, ready, callHandler };
+			return { agent, chat, session: agent.getSessionForTesting(created.session)!, ready, callHandler, endTurn };
 		}
 
 		test('the client tool is left for its client to confirm', async () => {
@@ -6191,6 +6201,19 @@ suite('ClaudeAgent', () => {
 			const result = callHandler();
 			await agent.chats.abort(chat, chatContext(chat));
 			assert.deepStrictEqual(await result, { content: [{ type: 'text', text: 'The turn was cancelled before the tool finished' }], isError: true });
+		});
+
+		test('a handler the CLI reaches after a Stop is settled too', async () => {
+			const { agent, chat, callHandler } = await startClientToolCall();
+			await agent.chats.abort(chat, chatContext(chat));
+			assert.deepStrictEqual(await callHandler(), { content: [{ type: 'text', text: 'The turn was cancelled before the tool finished' }], isError: true });
+		});
+
+		test('a result that arrives after the turn ended is not kept', async () => {
+			const { agent, chat, session, endTurn } = await startClientToolCall();
+			await endTurn();
+			agent.onClientToolCallComplete(chat, TOOL_USE_ID, completion);
+			assert.strictEqual(session.pendingClientToolCalls.hasBufferedResult(TOOL_USE_ID), false);
 		});
 
 		test('a confirmation for a call that is not a client tool is not buffered', async () => {

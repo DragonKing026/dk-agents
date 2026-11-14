@@ -441,6 +441,11 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 			return signal;
 		}
 		const action = signal.action;
+		if (action.type === ActionType.ChatTurnComplete || action.type === ActionType.ChatTurnCancelled || action.type === ActionType.ChatError) {
+			// The turn is over: nothing will ask for these calls any more.
+			this._settleClientToolCalls(false);
+			return signal;
+		}
 		if (action.type === ActionType.ChatToolCallStart && action.contributor?.kind === ToolCallContributorKind.Client) {
 			this._clientToolCalls.add(action.toolCallId);
 			return signal;
@@ -1233,17 +1238,30 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 	abort(): void {
 		this._pendingPermissions.denyAll(false);
 		this._pendingUserInputs.denyAll({ response: ChatInputResponseKind.Cancel });
-		this._settleClientToolCallsAsCancelled();
+		this._settleClientToolCalls(true);
 		this._requirePipeline().abort();
 	}
 
-	/** Settle every client tool call still waiting for its client, so no handler is left parked after a cancellation. */
-	private _settleClientToolCallsAsCancelled(): void {
-		this._clientToolCalls.clear();
-		this._pendingClientToolCalls.denyAll({
+	/**
+	 * Settle every client tool call still waiting for its client, so no handler is
+	 * left parked. With `keepForLateHandler` a call whose handler the CLI has not
+	 * reached yet also gets the cancelled result kept, so a handler registered
+	 * after a Stop does not hang. Such entries stay until the next rebind or
+	 * dispose clears the registry; there is at most one per call of the cancelled turn.
+	 */
+	private _settleClientToolCalls(keepForLateHandler: boolean): void {
+		const result: CallToolResult = {
 			content: [{ type: 'text', text: CLAUDE_CLIENT_TOOL_CANCELLED_MESSAGE }],
 			isError: true,
-		});
+		};
+		const notParked = [...this._clientToolCalls].filter(id => !this._pendingClientToolCalls.has(id));
+		this._clientToolCalls.clear();
+		this._pendingClientToolCalls.denyAll(result);
+		if (keepForLateHandler) {
+			for (const id of notParked) {
+				this._pendingClientToolCalls.respondOrBuffer(id, result);
+			}
+		}
 	}
 
 	/**
@@ -1435,6 +1453,7 @@ export class ClaudeAgentSession extends Disposable implements IRematerializer {
 			return false;
 		}
 		if (approved) {
+			this._logService.trace(`[Claude:${this.sessionId}] Client tool call approved by its client: ${requestId}`);
 			return true;
 		}
 		this._clientToolCalls.delete(requestId);
